@@ -1,3 +1,14 @@
+# Test1 — browser games
+
+Two standalone browser games live in this repo:
+
+- **Voxel Monk Fighter** (repo root) — 3D third-person voxel brawler. See below.
+- **GRIMVEIL** (`card-game/`) — a gloomy 2D pixel-art card battler. Open
+  `card-game/index.html` in any modern browser to play; see
+  [`card-game/README.md`](card-game/README.md) for the full rules.
+
+---
+
 # Voxel Monk Fighter
 
 A 3D third-person voxel brawler for PC that runs in any modern browser. You play
