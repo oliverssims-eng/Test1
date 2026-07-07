@@ -8,10 +8,16 @@ pixels.
 
 ## How to run
 
-No build step, no server, no dependencies — just open `index.html` in any
-modern browser (double-click it, or drag it into Chrome/Edge/Firefox).
-Progress (tokens, collection, decks, win record) is saved in your browser's
-localStorage automatically.
+**Easiest:** download the single file `Grimveil.html` from the repo root and
+double-click it — the whole game (styles, code, art engine) is bundled into
+that one file.
+
+Or run it from this folder: open `index.html` in any modern browser
+(double-click it, or drag it into Chrome/Edge/Firefox). No build step, no
+server, no dependencies either way. Progress (tokens, collection, decks, win
+record) is saved in your browser's localStorage automatically.
+
+To regenerate `Grimveil.html` after editing the source: `node card-game/build.js`.
 
 ## The flow
 
