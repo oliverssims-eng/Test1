@@ -71,7 +71,27 @@
   <p>Click to enter the plain</p>
 </div>
 
+<script>
+// Surface load/startup failures instead of a silent black screen.
+window.addEventListener('error', function (e) {
+  var el = document.getElementById('start');
+  var msg = e.message || 'failed to load ' + (e.target && e.target.src ? e.target.src : 'a file');
+  el.innerHTML = '<h1 style="color:#ff6b57">GAME FAILED TO START</h1>' +
+    '<p style="max-width:640px;text-align:center">' + msg + '</p>' +
+    '<p style="max-width:640px;text-align:center">Make sure game.js and vendor/three.min.js are in the ' +
+    'same folder as this file (download the whole folder, not just index.html) — or use the ' +
+    'single-file VoxelMonkFighter.html instead. Also check that WebGL is enabled in your browser.</p>';
+}, true);
+if (typeof WebGLRenderingContext === 'undefined') {
+  window.dispatchEvent(new ErrorEvent('error', { message: 'This browser has no WebGL support.' }));
+}
+</script>
 <script src="vendor/three.min.js"></script>
+<script>
+if (typeof THREE === 'undefined') {
+  window.dispatchEvent(new ErrorEvent('error', { message: 'vendor/three.min.js was not found next to index.html.' }));
+}
+</script>
 <script src="game.js"></script>
 </body>
 </html>
