@@ -79,6 +79,7 @@
     interact: $('interact'), death: $('death'), start: $('start'), menu: $('menu'),
     powname: $('powname'),
     abs: { r: $('ab-r'), t: $('ab-t'), c: $('ab-c'), g: $('ab-g') },
+    bossbar: $('bossbar'), bossname: $('bossname'), bhp: $('bhp'), bpost: $('bpost'),
   };
   const dmgFlash = document.createElement('div');
   dmgFlash.style.cssText = 'position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 120px rgba(200,20,10,.85);opacity:0;transition:opacity .5s;';
@@ -145,7 +146,7 @@
   }
 
   const plates = [];
-  function addPlate(x, z, color, label, spawnFn) {
+  function addPlate(x, z, color, label, spawnFn, opts) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     const base = new THREE.Mesh(
@@ -164,12 +165,13 @@
     lab.position.y = 1.7;
     g.add(lab);
     scene.add(g);
-    plates.push({ g, btn, btnMat, cd: 0, spawnFn, label, pressed: 0 });
+    plates.push(Object.assign({ g, btn, btnMat, cd: 0, spawnFn, label, pressed: 0 }, opts || {}));
   }
 
   addPlate(-9, 9, 0x7ec850, 'ZOMBIE', (p) => E.spawnZombie(scene, p));
   addPlate(0, 13, 0x4f9fe8, 'SWORDSMAN', (p) => E.spawnSwordsman(scene, p));
   addPlate(9, 9, 0xd8452e, 'OGRE', (p) => E.spawnOgre(scene, p));
+  addPlate(0, 20, 0xd8b545, 'BOSS', (p) => E.spawnBoss(scene, p), { boss: true });
 
   function updatePlates(dt) {
     for (const pl of plates) {
@@ -178,22 +180,28 @@
       pl.btn.position.y = 0.14 - 0.07 * Math.min(1, pl.pressed);
       pl.btnMat.emissiveIntensity = pl.cd > 0 ? 0.08 : 0.35 + 0.15 * Math.sin(perfT * 3);
       if (pl.cd <= 0 && player.alive && U.distXZ(player.pos, pl.g.position) < 1.35 && player.pos.y < 0.4) {
+        if (pl.boss && enemies.some((e) => e.alive && e.cfg.boss)) {
+          hud.toast('THE LANCER ALREADY HUNTS YOU');
+          pl.cd = 1.5;
+          continue;
+        }
         if (enemies.filter((e) => e.alive).length >= 8) {
           hud.toast('THE ARENA IS FULL');
           pl.cd = 1.2;
           continue;
         }
-        pl.cd = 2.5;
+        pl.cd = pl.boss ? 4 : 2.5;
         pl.pressed = 1;
         S.sfx.play('step');
         // spawn away from the plate, toward the middle
         const dir = new THREE.Vector3(-pl.g.position.x, 0, -pl.g.position.z).normalize();
-        const pos = pl.g.position.clone().addScaledVector(dir, 4.5);
+        const pos = pl.g.position.clone().addScaledVector(dir, pl.boss ? 7 : 4.5);
         pos.x += U.rand(-1.5, 1.5); pos.z += U.rand(-1.5, 1.5);
         const en = pl.spawnFn(pos);
         enemies.push(en);
         C.actors.push(en);
-        hud.toast(en.name + ' HAS APPEARED');
+        if (pl.boss) hud.msg('THE VEILED LANCER', 'deflect the arrows — dodge the skewer', 3.5);
+        else hud.toast(en.name + ' HAS APPEARED');
       }
     }
   }
@@ -287,6 +295,22 @@
       };
       prow.appendChild(card);
     }
+    const orow = $('opt-row');
+    const slCard = document.createElement('div');
+    slCard.className = 'card' + (S.settings.shiftLock ? ' sel' : '');
+    const slBody = () =>
+      `<div class="t"><span class="em">🎯</span>Shift Lock — ${S.settings.shiftLock ? 'ON' : 'OFF'}</div>` +
+      '<div class="d">Camera-locked strafing. Your character always faces where the camera looks; ' +
+      'A/D sidestep instead of turning. The camera sits over the shoulder.</div>';
+    slCard.innerHTML = slBody();
+    slCard.onclick = () => {
+      S.settings.shiftLock = !S.settings.shiftLock;
+      slCard.classList.toggle('sel', S.settings.shiftLock);
+      slCard.innerHTML = slBody();
+      S.sfx.play('clash');
+    };
+    orow.appendChild(slCard);
+
     $('menu-close').onclick = closeMenu;
   }
 
@@ -380,6 +404,17 @@
       const cd = player.cds[k];
       el.abs[k].classList.toggle('oncd', cd > 0);
       if (cd > 0) el.abs[k].querySelector('.cd').textContent = Math.ceil(cd);
+    }
+    // boss bar
+    const boss = enemies.find((e) => e.cfg.boss && e.alive);
+    if (boss) {
+      el.bossbar.style.display = 'block';
+      el.bossname.textContent = boss.name;
+      el.bhp.style.width = (100 * U.clamp(boss.hp / boss.hpMax, 0, 1)) + '%';
+      el.bpost.style.width = (100 * U.clamp(boss.posture / boss.postureMax, 0, 1)) + '%';
+      el.bossbar.classList.toggle('vuln', boss.vulnerable);
+    } else {
+      el.bossbar.style.display = 'none';
     }
   }
 

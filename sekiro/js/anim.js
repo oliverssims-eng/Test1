@@ -261,6 +261,27 @@
      ===================================================================== */
   const CL = (S.clips = {});
 
+  /* ---------- enemy weight: stretch the windup, keep the strike fast ----------
+     Rescales everything before the first hitOn by `factor`, shifts the rest,
+     and drops a 'glint' event just before the strike as a read cue. */
+  S.slowWindup = function (c, factor) {
+    const hitEv = c.events.find((e) => e[1] === 'hitOn');
+    if (!hitEv || factor === 1) return c;
+    const tHit = hitEv[0];
+    const shift = tHit * (factor - 1);
+    const remap = (t) => (t <= tHit ? t * factor : t + shift);
+    const out = {
+      name: c.name + 'H', dur: c.dur + shift,
+      keys: c.keys.map((k) => ({ t: remap(k.t), pose: k.pose, ease: k.ease })),
+      joints: c.joints, hasY: c.hasY,
+      events: c.events.map((e) => [remap(e[0]), e[1], e[2]]),
+      loop: c.loop, rate: c.rate,
+    };
+    out.events.push([Math.max(0.05, tHit * factor - 0.22), 'glint', null]);
+    out.events.sort((a, b) => a[0] - b[0]);
+    return out;
+  };
+
   /* ---------- weapon stances (persistent carry poses) ---------- */
   S.stances = {
     katana: {

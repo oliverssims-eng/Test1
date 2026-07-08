@@ -4,6 +4,9 @@
   'use strict';
   const S = (window.S = {});
 
+  // player-facing options (toggled from the M menu)
+  S.settings = { shiftLock: false };
+
   // ---------- math ----------
   const U = (S.U = {});
   U.clamp = (v, a, b) => (v < a ? a : v > b ? b : v);

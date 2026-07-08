@@ -270,10 +270,85 @@
     return w;
   };
 
+  /* ---------------- bow (held in the left hand) ---------------- */
+  Rig.makeBow = function () {
+    const g = new THREE.Group();
+    const wood = mat(0x3a2a1c, 0.8);
+    const seg = (y, rx) => {
+      const b = box(0.035, 0.42, 0.05, wood, 0, y, 0);
+      b.rotation.x = rx;
+      return b;
+    };
+    g.add(box(0.045, 0.22, 0.06, mat(0x241a10, 0.9), 0, 0, 0)); // grip
+    g.add(seg(0.28, -0.28));
+    g.add(seg(-0.28, 0.28));
+    const tip1 = box(0.03, 0.18, 0.04, wood, 0, 0.52, -0.1); tip1.rotation.x = -0.55; g.add(tip1);
+    const tip2 = box(0.03, 0.18, 0.04, wood, 0, -0.52, 0.1); tip2.rotation.x = 0.55; g.add(tip2);
+    const stringGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.58, -0.14), new THREE.Vector3(0, 0, -0.1), new THREE.Vector3(0, -0.58, 0.14),
+    ]);
+    g.add(new THREE.Line(stringGeo, new THREE.LineBasicMaterial({ color: 0xd8d0c0 })));
+    g.traverse((o) => { o.castShadow = true; });
+    return g;
+  };
+
+  Rig.equipBow = function (rig) {
+    const mount = new THREE.Group();
+    mount.position.set(0, -0.10, 0.02);
+    mount.rotation.set(0.25, 0, 0.15);
+    mount.add(Rig.makeBow());
+    rig.handL.add(mount);
+    rig.bowMount = mount;
+    return mount;
+  };
+
+  /* ---------------- cloak (hood + mantle + cape + robe flaps) ---------------- */
+  Rig.addCloak = function (rig, cloakColor, trimColor) {
+    const MC = mat(cloakColor, 0.92);
+    const MT = mat(trimColor, 0.55, 0.3);
+    const b = rig.bones;
+    // hood — shell around and above the head, open at the face
+    b.neck.add(box(0.36, 0.16, 0.36, MC, 0, 0.34, -0.02));
+    b.neck.add(box(0.36, 0.26, 0.10, MC, 0, 0.17, -0.16));
+    b.neck.add(box(0.05, 0.28, 0.30, MC, -0.165, 0.16, -0.02));
+    b.neck.add(box(0.05, 0.28, 0.30, MC, 0.165, 0.16, -0.02));
+    const brim = box(0.36, 0.05, 0.34, MC, 0, 0.30, 0.05);
+    brim.rotation.x = 0.18;
+    b.neck.add(brim);
+    // shoulder mantle with trim
+    b.chest.add(box(0.52, 0.12, 0.30, MC, 0, 0.22, -0.01));
+    b.chest.add(box(0.54, 0.03, 0.32, MT, 0, 0.155, -0.01));
+    // back cape
+    const cape = box(0.44, 0.88, 0.045, MC, 0, -0.42, 0);
+    const capePivot = new THREE.Group();
+    capePivot.position.set(0, 0.18, -0.14);
+    capePivot.rotation.x = -0.16;
+    capePivot.add(cape);
+    b.chest.add(capePivot);
+    // robe flaps from the waist
+    const flap = (x, z, ry, w) => {
+      const f = box(w, 0.62, 0.04, MC, 0, -0.31, 0);
+      const p = new THREE.Group();
+      p.position.set(x, -0.08, z);
+      p.rotation.y = ry;
+      p.rotation.x = z > 0 ? 0.14 : -0.14;
+      p.add(f);
+      b.root.add(p);
+      return p;
+    };
+    flap(0, 0.13, 0, 0.30);
+    flap(0, -0.13, 0, 0.34);
+    flap(-0.17, 0, Math.PI / 2, 0.26);
+    flap(0.17, 0, Math.PI / 2, 0.26);
+    // gold waist sash
+    b.root.add(box(0.32, 0.06, 0.23, MT, 0, -0.10, 0));
+  };
+
   /* ---------------- palettes ---------------- */
   Rig.presets = {
     player: { s: 1, skin: 0xb9babd, joint: 0x7e7f83, accent: 0x8f9095 },
     zombie: { s: 0.98, skin: 0x71855a, joint: 0x4a5238, accent: 0x3d4032, eyes: 0xbb2211, zombie: true },
     swordsman: { s: 1.02, skin: 0x4c5361, joint: 0x2e323b, accent: 0x8a2f2a, eyes: 0xffc040 },
+    boss: { s: 1.08, skin: 0x3b3548, joint: 0x232030, accent: 0x2a2438, eyes: 0x6ee4ff },
   };
 })();

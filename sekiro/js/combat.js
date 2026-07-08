@@ -48,8 +48,8 @@
     // ---- PARRY: the small window ----
     if (!atk.unblockable && defender.parryT > 0 && facing(defender, attacker.pos)) {
       FX.parrySparks(point);
-      FX.hitstop(0.09, 0.05);
-      FX.shake(0.35);
+      FX.hitstop(0.12, 0.04);
+      FX.shake(0.45);
       S.sfx.play('parry');
       const selfP = atk.selfPosture !== undefined ? atk.selfPosture : atk.dmg * 1.4;
       attacker.addPosture(selfP);
@@ -173,8 +173,21 @@
       p.vel.y -= p.gravity * dt;
       p.mesh.position.addScaledVector(p.vel, dt);
       if (p.spin) p.mesh.rotation.y += 12 * dt;
-      if (p.emit && Math.random() < 0.7) {
-        FX.puff(p.mesh.position, 1, p.color, { size: 0.3, grow: 1.5, life: 0.3, alpha: 0.5, speed: 0.2 });
+      if (p.emit) {
+        const mp = p.mesh.position;
+        if (p.emit === 'fire') {
+          FX.puff(mp, 1, 0xffe0a0, { size: 0.22, grow: 1.2, life: 0.18, alpha: 0.9, speed: 0.1 });
+          FX.puff(mp, 1, 0xff5522, { size: 0.34, grow: 2.2, life: 0.35, alpha: 0.6, speed: 0.3 });
+          if (Math.random() < 0.5) FX.spark(mp, 2, 0xffaa33, { speed: 1.5, gravity: -4, drag: 2, life: 0.6 });
+        } else if (p.emit === 'ice') {
+          FX.puff(mp, 1, 0xcfeeff, { size: 0.28, grow: 1.1, life: 0.4, alpha: 0.45, speed: 0.15 });
+          if (Math.random() < 0.6) FX.spark(mp, 2, 0xdff4ff, { speed: 1.2, gravity: 3, drag: 1, life: 0.5 });
+        } else if (p.emit === 'wind') {
+          FX.spark(mp, 2, 0xc8ffd8, { speed: 2.5, gravity: 0, drag: 0.6, life: 0.45 });
+          if (Math.random() < 0.4) FX.puff(mp, 1, 0xd8ffe8, { size: 0.3, grow: 1.6, life: 0.25, alpha: 0.35, speed: 0.4 });
+        } else if (Math.random() < 0.7) {
+          FX.puff(mp, 1, p.color, { size: 0.3, grow: 1.5, life: 0.3, alpha: 0.5, speed: 0.2 });
+        }
       }
       let dead = p.life <= 0 || p.mesh.position.y < 0;
 

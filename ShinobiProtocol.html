@@ -52,6 +52,22 @@
   #powname { position:absolute; right:28px; bottom:98px; color:#cdbb92; font-size:12px;
              letter-spacing:2px; text-shadow:0 1px 3px #000; text-align:right; }
 
+  /* boss bar */
+  #bossbar { position:absolute; top:22px; left:50%; transform:translateX(-50%);
+             width:46%; min-width:380px; display:none; }
+  #bossname { color:#e8d9ae; font-family:serif; font-size:17px; letter-spacing:5px;
+              text-align:center; margin-bottom:5px; text-shadow:0 0 14px rgba(110,228,255,.45), 0 2px 4px #000; }
+  #bhp-wrap { height:12px; background:rgba(10,8,6,.72); border:1px solid #4a3c48;
+              border-radius:2px; overflow:hidden; }
+  #bhp { height:100%; width:100%; background:linear-gradient(#c96a5a,#8a2f2a);
+         transition:width .12s linear; }
+  #bpost-wrap { position:relative; height:7px; margin-top:3px; background:rgba(10,8,6,.65);
+                border:1px solid #4a3c28; border-radius:2px; }
+  #bpost { position:absolute; left:50%; top:0; bottom:0; width:0%;
+           background:linear-gradient(#ffd76a,#e09a1e); transform:translateX(-50%);
+           transition:width .1s linear; }
+  #bossbar.vuln #bpost { background:linear-gradient(#ff9a4a,#e0491e); }
+
   /* perilous kanji */
   #peril { position:absolute; left:50%; top:26%; transform:translate(-50%,-50%) scale(.6);
            color:#ff2a1a; font-size:84px; font-weight:900; opacity:0;
@@ -138,6 +154,12 @@
 <div id="hud">
   <div id="cross"></div>
 
+  <div id="bossbar">
+    <div id="bossname"></div>
+    <div id="bhp-wrap"><div id="bhp"></div></div>
+    <div id="bpost-wrap"><div id="bpost"></div></div>
+  </div>
+
   <div id="vitals">
     <div id="pname">WOLF UNIT-01</div>
     <div id="php-wrap"><div id="php"></div></div>
@@ -170,6 +192,8 @@
   <div class="row" id="weapon-row"></div>
   <h3>— SHINOBI ART —</h3>
   <div class="row" id="power-row"></div>
+  <h3>— OPTIONS —</h3>
+  <div class="row" id="opt-row"></div>
   <button class="close" id="menu-close">RETURN</button>
 </div>
 
@@ -206,6 +230,9 @@
 (function () {
   'use strict';
   const S = (window.S = {});
+
+  // player-facing options (toggled from the M menu)
+  S.settings = { shiftLock: false };
 
   // ---------- math ----------
   const U = (S.U = {});
@@ -653,11 +680,86 @@
     return w;
   };
 
+  /* ---------------- bow (held in the left hand) ---------------- */
+  Rig.makeBow = function () {
+    const g = new THREE.Group();
+    const wood = mat(0x3a2a1c, 0.8);
+    const seg = (y, rx) => {
+      const b = box(0.035, 0.42, 0.05, wood, 0, y, 0);
+      b.rotation.x = rx;
+      return b;
+    };
+    g.add(box(0.045, 0.22, 0.06, mat(0x241a10, 0.9), 0, 0, 0)); // grip
+    g.add(seg(0.28, -0.28));
+    g.add(seg(-0.28, 0.28));
+    const tip1 = box(0.03, 0.18, 0.04, wood, 0, 0.52, -0.1); tip1.rotation.x = -0.55; g.add(tip1);
+    const tip2 = box(0.03, 0.18, 0.04, wood, 0, -0.52, 0.1); tip2.rotation.x = 0.55; g.add(tip2);
+    const stringGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.58, -0.14), new THREE.Vector3(0, 0, -0.1), new THREE.Vector3(0, -0.58, 0.14),
+    ]);
+    g.add(new THREE.Line(stringGeo, new THREE.LineBasicMaterial({ color: 0xd8d0c0 })));
+    g.traverse((o) => { o.castShadow = true; });
+    return g;
+  };
+
+  Rig.equipBow = function (rig) {
+    const mount = new THREE.Group();
+    mount.position.set(0, -0.10, 0.02);
+    mount.rotation.set(0.25, 0, 0.15);
+    mount.add(Rig.makeBow());
+    rig.handL.add(mount);
+    rig.bowMount = mount;
+    return mount;
+  };
+
+  /* ---------------- cloak (hood + mantle + cape + robe flaps) ---------------- */
+  Rig.addCloak = function (rig, cloakColor, trimColor) {
+    const MC = mat(cloakColor, 0.92);
+    const MT = mat(trimColor, 0.55, 0.3);
+    const b = rig.bones;
+    // hood — shell around and above the head, open at the face
+    b.neck.add(box(0.36, 0.16, 0.36, MC, 0, 0.34, -0.02));
+    b.neck.add(box(0.36, 0.26, 0.10, MC, 0, 0.17, -0.16));
+    b.neck.add(box(0.05, 0.28, 0.30, MC, -0.165, 0.16, -0.02));
+    b.neck.add(box(0.05, 0.28, 0.30, MC, 0.165, 0.16, -0.02));
+    const brim = box(0.36, 0.05, 0.34, MC, 0, 0.30, 0.05);
+    brim.rotation.x = 0.18;
+    b.neck.add(brim);
+    // shoulder mantle with trim
+    b.chest.add(box(0.52, 0.12, 0.30, MC, 0, 0.22, -0.01));
+    b.chest.add(box(0.54, 0.03, 0.32, MT, 0, 0.155, -0.01));
+    // back cape
+    const cape = box(0.44, 0.88, 0.045, MC, 0, -0.42, 0);
+    const capePivot = new THREE.Group();
+    capePivot.position.set(0, 0.18, -0.14);
+    capePivot.rotation.x = -0.16;
+    capePivot.add(cape);
+    b.chest.add(capePivot);
+    // robe flaps from the waist
+    const flap = (x, z, ry, w) => {
+      const f = box(w, 0.62, 0.04, MC, 0, -0.31, 0);
+      const p = new THREE.Group();
+      p.position.set(x, -0.08, z);
+      p.rotation.y = ry;
+      p.rotation.x = z > 0 ? 0.14 : -0.14;
+      p.add(f);
+      b.root.add(p);
+      return p;
+    };
+    flap(0, 0.13, 0, 0.30);
+    flap(0, -0.13, 0, 0.34);
+    flap(-0.17, 0, Math.PI / 2, 0.26);
+    flap(0.17, 0, Math.PI / 2, 0.26);
+    // gold waist sash
+    b.root.add(box(0.32, 0.06, 0.23, MT, 0, -0.10, 0));
+  };
+
   /* ---------------- palettes ---------------- */
   Rig.presets = {
     player: { s: 1, skin: 0xb9babd, joint: 0x7e7f83, accent: 0x8f9095 },
     zombie: { s: 0.98, skin: 0x71855a, joint: 0x4a5238, accent: 0x3d4032, eyes: 0xbb2211, zombie: true },
     swordsman: { s: 1.02, skin: 0x4c5361, joint: 0x2e323b, accent: 0x8a2f2a, eyes: 0xffc040 },
+    boss: { s: 1.08, skin: 0x3b3548, joint: 0x232030, accent: 0x2a2438, eyes: 0x6ee4ff },
   };
 })();
 
@@ -925,6 +1027,27 @@
        arm  rotation.z  : moves arm toward +X (left side); negate for right arm
      ===================================================================== */
   const CL = (S.clips = {});
+
+  /* ---------- enemy weight: stretch the windup, keep the strike fast ----------
+     Rescales everything before the first hitOn by `factor`, shifts the rest,
+     and drops a 'glint' event just before the strike as a read cue. */
+  S.slowWindup = function (c, factor) {
+    const hitEv = c.events.find((e) => e[1] === 'hitOn');
+    if (!hitEv || factor === 1) return c;
+    const tHit = hitEv[0];
+    const shift = tHit * (factor - 1);
+    const remap = (t) => (t <= tHit ? t * factor : t + shift);
+    const out = {
+      name: c.name + 'H', dur: c.dur + shift,
+      keys: c.keys.map((k) => ({ t: remap(k.t), pose: k.pose, ease: k.ease })),
+      joints: c.joints, hasY: c.hasY,
+      events: c.events.map((e) => [remap(e[0]), e[1], e[2]]),
+      loop: c.loop, rate: c.rate,
+    };
+    out.events.push([Math.max(0.05, tHit * factor - 0.22), 'glint', null]);
+    out.events.sort((a, b) => a[0] - b[0]);
+    return out;
+  };
 
   /* ---------- weapon stances (persistent carry poses) ---------- */
   S.stances = {
@@ -1551,6 +1674,65 @@
   const MAX_NUMS = 26;
   const nums = [];
 
+  /* ---------------- flares (star sprites) ---------------- */
+  const MAX_FLARES = 20;
+  const flares = [];
+
+  /* ---------------- camera-facing burst rings ---------------- */
+  const MAX_BRINGS = 14;
+  const brings = [];
+
+  /* ---------------- point-light flashes ---------------- */
+  const MAX_FLASH = 6;
+  const flashes = [];
+
+  /* ---------------- mesh shards (ice chunks, debris) ---------------- */
+  const MAX_SHARDS = 36;
+  const shardPool = [];
+
+  function starTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.translate(64, 64);
+    // 4-point star flare: two crossed soft beams + hot core
+    for (const [w, l] of [[7, 62], [16, 30]]) {
+      for (let i = 0; i < 2; i++) {
+        const grad = g.createLinearGradient(-l, 0, l, 0);
+        grad.addColorStop(0, 'rgba(255,255,255,0)');
+        grad.addColorStop(0.5, 'rgba(255,255,255,.95)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grad;
+        g.fillRect(-l, -w / 2, l * 2, w);
+        g.rotate(Math.PI / 2);
+      }
+      g.rotate(Math.PI / 4);
+    }
+    const core = g.createRadialGradient(0, 0, 1, 0, 0, 22);
+    core.addColorStop(0, 'rgba(255,255,255,1)');
+    core.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = core;
+    g.fillRect(-22, -22, 44, 44);
+    return new THREE.CanvasTexture(c);
+  }
+
+  function ringTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.strokeStyle = 'rgba(255,255,255,.95)';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.arc(64, 64, 52, 0, Math.PI * 2);
+    g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.4)';
+    g.lineWidth = 16;
+    g.beginPath();
+    g.arc(64, 64, 52, 0, Math.PI * 2);
+    g.stroke();
+    return new THREE.CanvasTexture(c);
+  }
+
   function radialTexture() {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
@@ -1611,6 +1793,44 @@
       line.visible = false; line.frustumCulled = false;
       scene.add(line);
       bolts.push({ live: false, line, life: 0, max: 0.15 });
+    }
+
+    // flares
+    const starTex = starTexture();
+    for (let i = 0; i < MAX_FLARES; i++) {
+      const m = new THREE.SpriteMaterial({ map: starTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
+      const sp = new THREE.Sprite(m);
+      sp.visible = false;
+      scene.add(sp);
+      flares.push({ live: false, sp, life: 0, max: 1, size: 1 });
+    }
+
+    // camera-facing rings
+    const ringTex = ringTexture();
+    for (let i = 0; i < MAX_BRINGS; i++) {
+      const m = new THREE.SpriteMaterial({ map: ringTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
+      const sp = new THREE.Sprite(m);
+      sp.visible = false;
+      scene.add(sp);
+      brings.push({ live: false, sp, life: 0, max: 1, from: 0.2, to: 2 });
+    }
+
+    // light flashes
+    for (let i = 0; i < MAX_FLASH; i++) {
+      const li = new THREE.PointLight(0xffffff, 0, 8);
+      scene.add(li);
+      flashes.push({ live: false, li, life: 0, max: 1, intensity: 2 });
+    }
+
+    // shards
+    for (let i = 0; i < MAX_SHARDS; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.06, 0.22, 5),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
+      );
+      mesh.visible = false;
+      scene.add(mesh);
+      shardPool.push({ live: false, mesh, v: new THREE.Vector3(), ang: new THREE.Vector3(), life: 0, max: 1 });
     }
 
     // damage numbers
@@ -1728,17 +1948,114 @@
     n.v.set(U.rand(-0.3, 0.3), 2.2, 0);
   };
 
+  FX.flare = function (pos, color, size, life) {
+    const f = flares.find((x) => !x.live);
+    if (!f) return;
+    f.live = true;
+    f.sp.visible = true;
+    f.sp.position.copy(pos);
+    f.size = size || 1.2;
+    f.max = f.life = life || 0.22;
+    f.sp.material.color.set(color);
+    f.sp.material.rotation = U.rand(0, Math.PI);
+    f.sp.scale.set(f.size, f.size, 1);
+  };
+
+  FX.burstRing = function (pos, color, opts) {
+    opts = opts || {};
+    const r = brings.find((x) => !x.live);
+    if (!r) return;
+    r.live = true;
+    r.sp.visible = true;
+    r.sp.position.copy(pos);
+    r.from = opts.from || 0.25;
+    r.to = opts.to || 2.4;
+    r.max = r.life = opts.life || 0.3;
+    r.sp.material.color.set(color);
+  };
+
+  FX.flash = function (pos, color, intensity, dist, dur) {
+    const f = flashes.find((x) => !x.live);
+    if (!f) return;
+    f.live = true;
+    f.li.position.copy(pos);
+    f.li.color.set(color);
+    f.li.distance = dist || 9;
+    f.intensity = intensity || 3;
+    f.max = f.life = dur || 0.18;
+  };
+
+  FX.shards = function (pos, color, n, opts) {
+    opts = opts || {};
+    for (let k = 0; k < n; k++) {
+      const s = shardPool.find((x) => !x.live);
+      if (!s) return;
+      s.live = true;
+      s.mesh.visible = true;
+      s.mesh.position.copy(pos);
+      s.mesh.material.color.set(color);
+      s.mesh.material.opacity = 0.95;
+      const sc = (opts.size || 1) * U.rand(0.6, 1.6);
+      s.mesh.scale.set(sc, sc, sc);
+      const a = Math.random() * Math.PI * 2;
+      const sp = opts.speed || 5;
+      s.v.set(Math.cos(a) * U.rand(0.3, 1), U.rand(0.6, 1.6), Math.sin(a) * U.rand(0.3, 1)).multiplyScalar(sp);
+      s.ang.set(U.rand(-9, 9), U.rand(-9, 9), U.rand(-9, 9));
+      s.max = s.life = U.rand(0.4, opts.life || 0.8);
+    }
+  };
+
+  // branching lightning strike with impact flash
+  FX.boltStrike = function (from, to, color) {
+    color = color || 0xfff2a0;
+    FX.bolt(from, to, color);
+    for (let b = 0; b < 2; b++) {
+      const t = U.rand(0.3, 0.7);
+      const mid = new THREE.Vector3().lerpVectors(from, to, t);
+      mid.x += U.rand(-0.5, 0.5); mid.z += U.rand(-0.5, 0.5);
+      const end = mid.clone().add(new THREE.Vector3(U.rand(-2, 2), U.rand(-1.5, -0.4), U.rand(-2, 2)));
+      end.y = Math.max(0.1, end.y);
+      FX.bolt(mid, end, color);
+    }
+    FX.flare(to, 0xffffff, 1.6, 0.14);
+    FX.flare(to, color, 2.6, 0.2);
+    FX.burstRing(to, color, { to: 2.6, life: 0.28 });
+    FX.flash(to, color, 4, 11, 0.16);
+    FX.spark(to, 22, color, { speed: 9, up: 4 });
+  };
+
+  // two-tone fire: white-hot core, red tongues, rising embers
+  FX.flameBurst = function (pos, n, opts) {
+    opts = opts || {};
+    const sz = opts.size || 0.5;
+    FX.puff(pos, Math.ceil(n * 0.4), 0xffe8b0, { size: sz * 0.7, grow: 2.2, life: 0.25, alpha: 0.95, speed: opts.speed || 0.6, dir: opts.dir });
+    FX.puff(pos, n, 0xff6622, { size: sz, grow: 2.8, life: 0.4, alpha: 0.7, speed: opts.speed || 0.8, dir: opts.dir });
+    FX.puff(pos, Math.ceil(n * 0.5), 0xb02808, { size: sz * 1.2, grow: 3.2, life: 0.55, alpha: 0.45, speed: opts.speed || 0.9, dir: opts.dir });
+    FX.spark(pos, Math.ceil(n * 1.5), 0xffaa33, { speed: 3.5, up: 4, gravity: -4, drag: 2.2, life: 0.8 });
+    if (!opts.noFlash) FX.flash(pos, 0xff7733, 2.5, 8, 0.2);
+  };
+
   /* ---------------- composite effects ---------------- */
   FX.parrySparks = function (pos) {
-    FX.spark(pos, 42, 0xffcc33, { speed: 10, life: 0.5 });
-    FX.spark(pos, 16, 0xfff0aa, { speed: 14, life: 0.3 });
-    FX.puff(pos, 3, 0xffdd66, { size: 0.7, grow: 3.5, life: 0.25, alpha: 0.9, speed: 0.3 });
+    // the golden deflect: blinding star flash, ring shock, metal spray
+    FX.flare(pos, 0xffffff, 1.5, 0.12);
+    FX.flare(pos, 0xffd75e, 3.4, 0.24);
+    FX.burstRing(pos, 0xffe9a0, { from: 0.3, to: 3.2, life: 0.3 });
+    FX.burstRing(pos, 0xffc030, { from: 0.2, to: 1.8, life: 0.22 });
+    FX.flash(pos, 0xffd75e, 5, 12, 0.22);
+    FX.spark(pos, 55, 0xffcc33, { speed: 12, life: 0.55 });
+    FX.spark(pos, 24, 0xfff4c0, { speed: 17, life: 0.32 });
+    FX.spark(pos, 12, 0xffffff, { speed: 7, life: 0.7, gravity: 14 });
+    FX.puff(pos, 3, 0xffdd66, { size: 0.7, grow: 4, life: 0.22, alpha: 0.9, speed: 0.3 });
   };
   FX.blockSparks = function (pos) {
-    FX.spark(pos, 12, 0xc8c8d4, { speed: 6, life: 0.35 });
+    FX.flare(pos, 0xdfe4ee, 1.1, 0.13);
+    FX.spark(pos, 16, 0xc8c8d4, { speed: 7, life: 0.35 });
+    FX.spark(pos, 6, 0xffffff, { speed: 10, life: 0.2 });
     FX.puff(pos, 1, 0xaaaabb, { size: 0.4, grow: 2, life: 0.2, alpha: 0.5 });
   };
   FX.hitSparks = function (pos, big) {
+    if (big) FX.flare(pos, 0xff5533, 1.8, 0.16);
     FX.spark(pos, big ? 30 : 16, 0xff4433, { speed: big ? 9 : 6, life: 0.45 });
     FX.puff(pos, big ? 4 : 2, 0xcc2211, { size: big ? 0.7 : 0.45, grow: 2.4, life: 0.3, alpha: 0.7 });
   };
@@ -1889,6 +2206,50 @@
       b.line.material.opacity = b.life / b.max;
     }
 
+    // flares
+    for (const f of flares) {
+      if (!f.live) continue;
+      f.life -= dt;
+      if (f.life <= 0) { f.live = false; f.sp.visible = false; continue; }
+      const t = 1 - f.life / f.max;
+      const sc = f.size * (0.4 + 0.9 * U.ease.out(t));
+      f.sp.scale.set(sc, sc, 1);
+      f.sp.material.opacity = 1 - t * t;
+    }
+
+    // burst rings
+    for (const r of brings) {
+      if (!r.live) continue;
+      r.life -= dt;
+      if (r.life <= 0) { r.live = false; r.sp.visible = false; continue; }
+      const t = 1 - r.life / r.max;
+      const sc = U.lerp(r.from, r.to, U.ease.out(t));
+      r.sp.scale.set(sc, sc, 1);
+      r.sp.material.opacity = 0.95 * (1 - t);
+    }
+
+    // light flashes
+    for (const f of flashes) {
+      if (!f.live) continue;
+      f.life -= dt;
+      if (f.life <= 0) { f.live = false; f.li.intensity = 0; continue; }
+      f.li.intensity = f.intensity * (f.life / f.max);
+    }
+
+    // shards
+    for (const s of shardPool) {
+      if (!s.live) continue;
+      s.life -= dt;
+      if (s.life <= 0) { s.live = false; s.mesh.visible = false; continue; }
+      s.v.y -= 16 * dt;
+      s.mesh.position.addScaledVector(s.v, dt);
+      if (s.mesh.position.y < 0.04) { s.mesh.position.y = 0.04; s.v.y *= -0.35; s.v.x *= 0.7; s.v.z *= 0.7; }
+      s.mesh.rotation.x += s.ang.x * dt;
+      s.mesh.rotation.y += s.ang.y * dt;
+      s.mesh.rotation.z += s.ang.z * dt;
+      s.mesh.material.opacity = Math.min(0.95, (s.life / s.max) * 2);
+    }
+
     // numbers
     for (const n of nums) {
       if (!n.live) continue;
@@ -1954,8 +2315,8 @@
     // ---- PARRY: the small window ----
     if (!atk.unblockable && defender.parryT > 0 && facing(defender, attacker.pos)) {
       FX.parrySparks(point);
-      FX.hitstop(0.09, 0.05);
-      FX.shake(0.35);
+      FX.hitstop(0.12, 0.04);
+      FX.shake(0.45);
       S.sfx.play('parry');
       const selfP = atk.selfPosture !== undefined ? atk.selfPosture : atk.dmg * 1.4;
       attacker.addPosture(selfP);
@@ -2079,8 +2440,21 @@
       p.vel.y -= p.gravity * dt;
       p.mesh.position.addScaledVector(p.vel, dt);
       if (p.spin) p.mesh.rotation.y += 12 * dt;
-      if (p.emit && Math.random() < 0.7) {
-        FX.puff(p.mesh.position, 1, p.color, { size: 0.3, grow: 1.5, life: 0.3, alpha: 0.5, speed: 0.2 });
+      if (p.emit) {
+        const mp = p.mesh.position;
+        if (p.emit === 'fire') {
+          FX.puff(mp, 1, 0xffe0a0, { size: 0.22, grow: 1.2, life: 0.18, alpha: 0.9, speed: 0.1 });
+          FX.puff(mp, 1, 0xff5522, { size: 0.34, grow: 2.2, life: 0.35, alpha: 0.6, speed: 0.3 });
+          if (Math.random() < 0.5) FX.spark(mp, 2, 0xffaa33, { speed: 1.5, gravity: -4, drag: 2, life: 0.6 });
+        } else if (p.emit === 'ice') {
+          FX.puff(mp, 1, 0xcfeeff, { size: 0.28, grow: 1.1, life: 0.4, alpha: 0.45, speed: 0.15 });
+          if (Math.random() < 0.6) FX.spark(mp, 2, 0xdff4ff, { speed: 1.2, gravity: 3, drag: 1, life: 0.5 });
+        } else if (p.emit === 'wind') {
+          FX.spark(mp, 2, 0xc8ffd8, { speed: 2.5, gravity: 0, drag: 0.6, life: 0.45 });
+          if (Math.random() < 0.4) FX.puff(mp, 1, 0xd8ffe8, { size: 0.3, grow: 1.6, life: 0.25, alpha: 0.35, speed: 0.4 });
+        } else if (Math.random() < 0.7) {
+          FX.puff(mp, 1, p.color, { size: 0.3, grow: 1.5, life: 0.3, alpha: 0.5, speed: 0.2 });
+        }
       }
       let dead = p.life <= 0 || p.mesh.position.y < 0;
 
@@ -2159,9 +2533,15 @@
         desc: 'Hurl a searing bolt of flame. 20 dmg.',
         exec(player) {
           S.sfx.play('fire');
+          const pos = castOrigin(player);
+          FX.flare(pos, 0xffa040, 1.4, 0.18);
           C.spawnProjectile({
-            pos: castOrigin(player), dir: player.aimDir(), speed: 19, dmg: 20, posture: 16,
-            team: player.team, source: player, color: 0xff7733, kind: 'orb', emit: true, life: 2.0,
+            pos, dir: player.aimDir(), speed: 19, dmg: 20, posture: 16,
+            team: player.team, source: player, color: 0xff7733, kind: 'orb', emit: 'fire', life: 2.0,
+            onExpire(p) {
+              FX.flameBurst(p, 5, { size: 0.6 });
+              FX.burstRing(p, 0xff8833, { to: 2, life: 0.25 });
+            },
           });
         },
       },
@@ -2170,15 +2550,26 @@
         desc: 'A fan of fire erupts before you. 16 dmg per tongue, knocks back.',
         exec(player) {
           S.sfx.play('fire');
-          const f = fwd(player, tmp);
           FX.ring(player.pos, 0xff7733, { to: 3.5, life: 0.35 });
+          FX.flash(castOrigin(player), 0xff6622, 4, 10, 0.3);
           for (let i = -2; i <= 2; i++) {
             const a = player.yaw + i * 0.24;
             C.spawnProjectile({
               pos: castOrigin(player),
               dir: new THREE.Vector3(Math.sin(a), 0, Math.cos(a)), speed: 13,
               dmg: 16, posture: 18, team: player.team, source: player,
-              color: 0xff5522, kind: 'orb', emit: true, life: 0.45, pierce: true, kb: 5,
+              color: 0xff5522, kind: 'orb', emit: 'fire', life: 0.45, pierce: true, kb: 5,
+            });
+          }
+          // an advancing wall of ground-fire under the fan
+          for (let w = 0; w < 3; w++) {
+            P.schedule(0.09 * w, () => {
+              for (let i = -2; i <= 2; i++) {
+                const a = player.yaw + i * 0.24;
+                const p = player.pos.clone().add(new THREE.Vector3(Math.sin(a), 0, Math.cos(a)).multiplyScalar(1.4 + w * 1.5));
+                p.y = 0.25;
+                FX.flameBurst(p, 3, { size: 0.5, noFlash: w > 0 });
+              }
             });
           }
         },
@@ -2199,10 +2590,15 @@
           player.meteorLeap({
             onLand(pos) {
               S.sfx.play('hitBig');
-              FX.shake(0.6);
+              FX.shake(0.7);
+              FX.hitstop(0.06, 0.15);
               FX.slam(pos, 0xff7733);
-              FX.ring(pos, 0xff5522, { to: 5, life: 0.5 });
-              FX.spark(pos, 40, 0xff7733, { speed: 10, up: 6 });
+              FX.ring(pos, 0xff5522, { to: 5.5, life: 0.55 });
+              FX.ring(pos, 0xffcc66, { to: 3, life: 0.35 });
+              FX.flare(pos.clone().setY(1), 0xffcc66, 4, 0.3);
+              FX.flash(pos, 0xff6622, 6, 14, 0.35);
+              FX.flameBurst(pos.clone().setY(0.5), 12, { size: 0.9, speed: 2 });
+              FX.shards(pos.clone().setY(0.3), 0x553322, 8, { speed: 7, size: 1.4 });
               C.aoe(player, pos, 4.2, { dmg: 40, posture: 40, kb: 9 });
             },
           });
@@ -2221,10 +2617,17 @@
         desc: 'A frozen lance that pierces and chills. 16 dmg, slows 3s.',
         exec(player) {
           S.sfx.play('ice');
+          const pos = castOrigin(player);
+          FX.flare(pos, 0xbfeaff, 1.2, 0.16);
           C.spawnProjectile({
-            pos: castOrigin(player), dir: player.aimDir(), speed: 24, dmg: 16, posture: 12,
-            team: player.team, source: player, color: 0x9fe0ff, kind: 'shard', emit: true,
+            pos, dir: player.aimDir(), speed: 24, dmg: 16, posture: 12,
+            team: player.team, source: player, color: 0x9fe0ff, kind: 'shard', emit: 'ice',
             status: { name: 'slow', dur: 3 }, life: 1.6,
+            onExpire(p) {
+              FX.shards(p, 0xcfeeff, 7, { speed: 5, size: 0.9 });
+              FX.burstRing(p, 0xbfeaff, { to: 1.8, life: 0.25 });
+              FX.flare(p, 0xffffff, 1.3, 0.14);
+            },
           });
         },
       },
@@ -2233,8 +2636,19 @@
         desc: 'Everything near you is frozen solid for 1.6s. 15 dmg.',
         exec(player) {
           S.sfx.play('ice');
-          FX.ring(player.pos, 0x9fe0ff, { to: 4, life: 0.5 });
-          FX.spark(player.pos.clone().setY(1), 30, 0xbfeaff, { speed: 8 });
+          FX.ring(player.pos, 0x9fe0ff, { to: 4.2, life: 0.55 });
+          FX.ring(player.pos, 0xffffff, { to: 2.4, life: 0.35 });
+          FX.burstRing(player.pos.clone().setY(1.2), 0xbfeaff, { to: 5, life: 0.4 });
+          FX.flare(player.pos.clone().setY(1.3), 0xdff4ff, 3, 0.3);
+          FX.flash(player.pos.clone().setY(1.2), 0x9fd0ff, 4, 12, 0.3);
+          FX.spark(player.pos.clone().setY(1), 34, 0xbfeaff, { speed: 8 });
+          FX.shards(player.pos.clone().setY(0.6), 0xcfeeff, 12, { speed: 6, size: 1.1 });
+          // ground frost mist creeping out
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            FX.puff(new THREE.Vector3(player.pos.x + Math.cos(a) * 2, 0.15, player.pos.z + Math.sin(a) * 2),
+              2, 0xdff4ff, { size: 0.6, grow: 2, life: 0.8, alpha: 0.35, speed: 0.4 });
+          }
           C.aoe(player, player.pos, 3.8, { dmg: 15, posture: 20, status: { name: 'freeze', dur: 1.6 } });
         },
       },
@@ -2266,7 +2680,9 @@
               spike.castShadow = true;
               scene.add(spike);
               FX.spark(p, 10, 0xbfeaff, { speed: 5, up: 5 });
-              FX.dust(p, 3);
+              FX.shards(p.clone().setY(0.4), 0xcfeeff, 4, { speed: 4, size: 0.8 });
+              FX.puff(p, 3, 0xdff4ff, { size: 0.5, grow: 1.8, life: 0.5, alpha: 0.4, speed: 0.5 });
+              FX.dust(p, 2);
               C.aoe(player, p, 1.3, { dmg: 14, posture: 18, kb: 4 });
               P.addEffect({
                 t: 0,
@@ -2298,10 +2714,13 @@
         desc: 'A spinning blade of air that passes through foes. 13 dmg.',
         exec(player) {
           S.sfx.play('wind');
+          const pos = castOrigin(player);
+          FX.burstRing(pos, 0xd0ffe0, { from: 0.6, to: 0.15, life: 0.18 });
           C.spawnProjectile({
-            pos: castOrigin(player), dir: player.aimDir(), speed: 21, dmg: 13, posture: 14,
+            pos, dir: player.aimDir(), speed: 21, dmg: 13, posture: 14,
             team: player.team, source: player, color: 0xd0ffe0, kind: 'blade', pierce: true,
-            spinAxis: true, life: 1.4,
+            spinAxis: true, life: 1.4, emit: 'wind',
+            onExpire(p) { FX.burstRing(p, 0xc8ffd8, { to: 1.6, life: 0.22 }); },
           });
         },
       },
@@ -2311,12 +2730,29 @@
         exec(player) {
           S.sfx.play('wind');
           FX.ring(player.pos, 0xd0ffe0, { to: 7, life: 0.5 });
-          for (const t of C.enemiesOf(player.team)) {
-            if (U.distXZ(player.pos, t.pos) > 7) continue;
-            tmp.subVectors(player.pos, t.pos).setY(0).normalize();
-            if (t.applyKnockback) t.applyKnockback(tmp, 9);
-            C.resolveAttack(player, t, { dmg: 8, posture: 10, point: t.chestPos() });
-            FX.puff(t.chestPos(), 4, 0xd0ffe0, { size: 0.4, grow: 2, life: 0.3, alpha: 0.5 });
+          // visible indraft: streaks spiral inward from the edge
+          const c = player.pos.clone();
+          let t = 0;
+          P.addEffect({
+            update(dt) {
+              t += dt;
+              for (let i = 0; i < 5; i++) {
+                const a = U.rand(0, Math.PI * 2);
+                const r = U.lerp(6.5, 1, t / 0.5) * U.rand(0.8, 1.1);
+                const p = new THREE.Vector3(c.x + Math.cos(a) * r, U.rand(0.2, 1.8), c.z + Math.sin(a) * r);
+                const dir = new THREE.Vector3(c.x - p.x, 0, c.z - p.z).normalize();
+                FX.spark(p, 2, 0xc8ffd8, { speed: 4, dir, gravity: 0, drag: 0.4, life: 0.35 });
+                if (Math.random() < 0.4) FX.puff(p, 1, 0xd8ffe8, { size: 0.35, grow: 1.4, life: 0.3, alpha: 0.35, dir, speed: 2 });
+              }
+              return t < 0.5;
+            },
+          });
+          for (const t2 of C.enemiesOf(player.team)) {
+            if (U.distXZ(player.pos, t2.pos) > 7) continue;
+            tmp.subVectors(player.pos, t2.pos).setY(0).normalize();
+            if (t2.applyKnockback) t2.applyKnockback(tmp, 9);
+            C.resolveAttack(player, t2, { dmg: 8, posture: 10, point: t2.chestPos() });
+            FX.puff(t2.chestPos(), 4, 0xd0ffe0, { size: 0.4, grow: 2, life: 0.3, alpha: 0.5 });
           }
         },
       },
@@ -2340,15 +2776,20 @@
           P.addEffect({
             update(dt) {
               t += dt; tick -= dt;
-              for (let i = 0; i < 3; i++) {
-                const h = Math.random() * 3;
-                FX.puff(new THREE.Vector3(
-                  p.x + Math.cos(t * 9 + h * 3) * (0.4 + h * 0.35), h,
-                  p.z + Math.sin(t * 9 + h * 3) * (0.4 + h * 0.35)),
-                  1, 0xd0ffe0, { size: 0.5, grow: 1, life: 0.3, alpha: 0.4 });
+              for (let i = 0; i < 4; i++) {
+                const h = Math.random() * 3.2;
+                const r = 0.4 + h * 0.38;
+                const a = t * 9 + h * 3 + i * 1.6;
+                const pp = new THREE.Vector3(p.x + Math.cos(a) * r, h, p.z + Math.sin(a) * r);
+                FX.puff(pp, 1, 0xd0ffe0, { size: 0.5, grow: 1, life: 0.3, alpha: 0.4 });
+                // circling streaks tangent to the funnel
+                const tan = new THREE.Vector3(-Math.sin(a), 0.15, Math.cos(a));
+                FX.spark(pp, 1, 0xc8ffd8, { speed: 5, dir: tan, gravity: 0, drag: 1, life: 0.3 });
               }
+              if (Math.random() < 0.25) FX.dust(new THREE.Vector3(p.x, 0.1, p.z), 1);
               if (tick <= 0) {
                 tick = 0.33;
+                FX.burstRing(new THREE.Vector3(p.x, 1.4, p.z), 0xd0ffe0, { to: 3, life: 0.3 });
                 C.aoe(player, p, 2.2, { dmg: 6, posture: 14, kb: 3, noNumber: t > 0.4 });
               }
               return t < 2.5;
@@ -2376,8 +2817,7 @@
             if (d < bd && a < 0.9) { bd = d; best = t; }
           }
           const target = best ? best.chestPos() : player.pos.clone().addScaledVector(fwd(player, tmp), 6).setY(1);
-          FX.bolt(target.clone().setY(target.y + 9), target, 0xfff2a0);
-          FX.spark(target, 20, 0xffe97a, { speed: 8 });
+          FX.boltStrike(target.clone().setY(target.y + 9), target, 0xfff2a0);
           if (best) C.resolveAttack(player, best, { dmg: 18, posture: 22, point: target, status: { name: 'stun', dur: 0.6 } });
         },
       },
@@ -2387,11 +2827,17 @@
         exec(player) {
           S.sfx.play('bolt');
           const c = player.pos.clone().setY(1.2);
+          FX.flare(c, 0xffffff, 2, 0.14);
+          FX.flare(c, 0xffe97a, 3.5, 0.26);
+          FX.flash(c, 0xffe97a, 6, 13, 0.25);
           for (let i = 0; i < 6; i++) {
-            const a = (i / 6) * Math.PI * 2;
-            FX.bolt(c, new THREE.Vector3(c.x + Math.cos(a) * 4, 0.3, c.z + Math.sin(a) * 4), 0xfff2a0);
+            const a = (i / 6) * Math.PI * 2 + U.rand(-0.2, 0.2);
+            const end = new THREE.Vector3(c.x + Math.cos(a) * 4, 0.3, c.z + Math.sin(a) * 4);
+            FX.bolt(c, end, 0xfff2a0);
+            FX.spark(end, 6, 0xffe97a, { speed: 5, up: 3 });
           }
           FX.ring(player.pos, 0xffe97a, { to: 4.5, life: 0.4 });
+          FX.burstRing(c, 0xfff2a0, { to: 4, life: 0.3 });
           C.aoe(player, player.pos, 4.2, { dmg: 12, posture: 18, status: { name: 'stun', dur: 1.2 } });
         },
       },
@@ -2414,9 +2860,8 @@
               let p;
               if (foes.length) p = U.pick(foes).pos.clone().setY(0.2);
               else p = player.pos.clone().add(new THREE.Vector3(U.rand(-5, 5), 0, U.rand(-5, 5)));
-              FX.bolt(p.clone().setY(10), p, 0xfff2a0);
-              FX.spark(p.clone().setY(0.4), 18, 0xffe97a, { speed: 8, up: 5 });
-              FX.ring(p, 0xffe97a, { to: 2, life: 0.3 });
+              FX.boltStrike(p.clone().setY(10), p.clone().setY(0.3), 0xfff2a0);
+              FX.ring(p, 0xffe97a, { to: 2.2, life: 0.3 });
               C.aoe(player, p, 1.7, { dmg: 15, posture: 16, status: { name: 'stun', dur: 0.4 } });
             });
           }
@@ -2678,8 +3123,10 @@
       tmp.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
       this.vel.x = tmp.x * 5.5; this.vel.z = tmp.z * 5.5;
       this.meteorOnLand = opts.onLand;
+      this.meteorFx = true;
       this.anim.play(CL.airAtk, { speed: 0.6 });
-      FX.spark(this.pos, 16, 0xff7733, { speed: 6, up: 4 });
+      FX.flameBurst(this.pos.clone().setY(0.4), 5, { size: 0.6 });
+      FX.burstRing(this.pos.clone().setY(0.6), 0xff8833, { to: 2.2, life: 0.3 });
     }
 
     galeVault() {
@@ -2701,12 +3148,23 @@
       const dir = wish.lengthSq() > 0.01 ? wish.clone().normalize()
         : tmp2.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).clone();
       const from = this.chestPos();
+      FX.flare(from, 0xffe97a, 2, 0.2);
       FX.spark(from, 20, 0xffe97a, { speed: 6 });
+      FX.flash(from, 0xffe97a, 3, 8, 0.15);
       this.pos.x = U.clamp(this.pos.x + dir.x * dist, -ARENA_R, ARENA_R);
       this.pos.z = U.clamp(this.pos.z + dir.z * dist, -ARENA_R, ARENA_R);
       this.iframes = Math.max(this.iframes, 0.3);
       const to = this.chestPos();
       FX.bolt(from, to, 0xfff2a0);
+      // crackling afterimages along the path
+      for (let i = 1; i <= 3; i++) {
+        const p = from.clone().lerp(to, i / 4);
+        FX.spark(p, 5, 0xfff2a0, { speed: 3, gravity: 0, life: 0.3 });
+      }
+      FX.flare(to, 0xffffff, 1.4, 0.12);
+      FX.flare(to, 0xffe97a, 2.4, 0.22);
+      FX.burstRing(to, 0xfff2a0, { to: 2, life: 0.25 });
+      FX.flash(to, 0xffe97a, 4, 10, 0.2);
       FX.spark(to, 20, 0xffe97a, { speed: 6 });
       this.yaw = Math.atan2(dir.x, dir.z);
     }
@@ -2910,12 +3368,15 @@
         this.vel.x = this.dashVel.x; this.vel.z = this.dashVel.z;
         if (this.pdash) {
           if (this.pdash.fx === 'fire') {
-            FX.puff(this.pos.clone().setY(0.5), 2, 0xff7733, { size: 0.45, grow: 1.8, life: 0.4, alpha: 0.6 });
+            FX.flameBurst(this.pos.clone().setY(0.5), 2, { size: 0.5, noFlash: true });
+            if (Math.random() < 0.4) FX.flash(this.chestPos(), 0xff6622, 2, 6, 0.12);
             if (this.pdash.dmg) {
               C.meleeSweep(this, { reach: 1.4, arc: Math.PI, atk: { dmg: this.pdash.dmg, posture: 10 }, hitSet: this.pdash.hitSet });
             }
           } else if (this.pdash.fx === 'ice') {
-            FX.puff(this.pos.clone().setY(0.25), 2, 0x9fe0ff, { size: 0.4, grow: 1.4, life: 0.5, alpha: 0.5 });
+            FX.puff(this.pos.clone().setY(0.25), 2, 0xcfeeff, { size: 0.45, grow: 1.4, life: 0.55, alpha: 0.5 });
+            FX.spark(this.pos.clone().setY(0.3), 2, 0xdff4ff, { speed: 2, gravity: 2, life: 0.5 });
+            if (Math.random() < 0.3) FX.shards(this.pos.clone().setY(0.15), 0xcfeeff, 1, { speed: 2, size: 0.6, life: 0.5 });
           }
         }
         if (this.dashT <= 0) {
@@ -2935,6 +3396,11 @@
         // attacking / casting / staggered on the ground — bleed momentum
         this.vel.x = U.dampTo(this.vel.x, 0, 8, dt);
         this.vel.z = U.dampTo(this.vel.z, 0, 8, dt);
+      }
+
+      // meteor: burn on the way down
+      if (this.state === 'meteor' && !this.grounded && this.vel.y < 2) {
+        FX.flameBurst(this.chestPos(), 1, { size: 0.5, noFlash: true });
       }
 
       // gravity
@@ -2972,9 +3438,11 @@
       const engaged = this.state === 'attack' || this.state === 'cast' || this.guarding || this.parryT > 0;
       if (engaged && lock) targetYaw = U.yawTo(this.pos, lock.pos);
       else if (engaged) targetYaw = this.camYaw;
+      else if (S.settings.shiftLock && this.alive && this.state !== 'dash') targetYaw = this.camYaw;
       else if (hspeed > 0.6) targetYaw = Math.atan2(this.vel.x, this.vel.z);
       else if (this.guarding) targetYaw = this.camYaw;
-      const yawRate = this.state === 'attack' && this.anim.clipFrac < 0.4 ? 14 : (engaged ? 12 : 11);
+      const yawRate = this.state === 'attack' && this.anim.clipFrac < 0.4 ? 14
+        : (engaged ? 12 : S.settings.shiftLock ? 16 : 11);
       this.yaw = U.dampAngle(this.yaw, targetYaw, yawRate, dt);
       this.rig.group.rotation.y = this.yaw;
 
@@ -3014,6 +3482,11 @@
       const cp = this.camPitch;
       tmp.set(Math.sin(this.camYaw) * Math.cos(cp), Math.sin(cp), Math.cos(this.camYaw) * Math.cos(cp));
       const eye = tmp2.set(this.pos.x, this.pos.y + 1.55, this.pos.z);
+      if (S.settings.shiftLock) {
+        // over-the-shoulder offset
+        eye.x += -Math.cos(this.camYaw) * 0.75;
+        eye.z += Math.sin(this.camYaw) * 0.75;
+      }
       const desired = tmp3.copy(eye).addScaledVector(tmp, -4.4);
       desired.y = Math.max(0.35, desired.y);
       this.camPos.x = U.dampTo(this.camPos.x, desired.x, 30, dt);
@@ -3147,7 +3620,7 @@
 
       this.status = { slow: 0, freeze: 0, stun: 0 };
 
-      this.bar = new Bar(this.rig.group, (this.rig.height || 1.8) + 0.35, cfg.barWidth);
+      this.bar = cfg.noBar ? null : new Bar(this.rig.group, (this.rig.height || 1.8) + 0.35, cfg.barWidth);
 
       // rise from the ground
       this.pos.y = -(this.rig.height || 1.8) * 0.9;
@@ -3213,7 +3686,33 @@
     }
     applyStatus(name, dur) {
       if (this.status[name] !== undefined) this.status[name] = Math.max(this.status[name], dur);
-      if (name === 'freeze') FX.spark(this.chestPos(), 12, 0x9fe0ff, { speed: 4 });
+      if (name === 'freeze') {
+        FX.spark(this.chestPos(), 12, 0x9fe0ff, { speed: 4 });
+        FX.shards(this.chestPos(), 0xcfeeff, 5, { speed: 4, size: 0.8 });
+        // encase in a crystal shell
+        if (!this._ice) {
+          const h = this.rig.height || 1.8;
+          const w = (this.radius || 0.5) * 2 + 0.35;
+          this._ice = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h * 1.02, w),
+            new THREE.MeshStandardMaterial({ color: 0xaadfff, transparent: true, opacity: 0.42, roughness: 0.12, metalness: 0.1 })
+          );
+          this._ice.position.y = h * 0.51;
+          this.rig.group.add(this._ice);
+        }
+      }
+    }
+
+    thawIce() {
+      if (!this._ice) return;
+      const p = this.chestPos();
+      FX.shards(p, 0xcfeeff, 9, { speed: 6, size: 1 });
+      FX.spark(p, 14, 0xdff4ff, { speed: 5 });
+      S.sfx.play('ice');
+      this.rig.group.remove(this._ice);
+      this._ice.geometry.dispose();
+      this._ice.material.dispose();
+      this._ice = null;
     }
 
     die() {
@@ -3224,10 +3723,11 @@
       this.guarding = false;
       this.anim.overlay = null;
       this.deathT = 3.2;
+      this.thawIce();
       this.anim.play(CL.death, { speed: this.cfg.big ? 0.75 : 1 });
       S.sfx.play(this.cfg.big ? 'roar' : 'hitBig');
       FX.deathBurst(this.chestPos(), 0xdd3322);
-      this.bar.remove();
+      if (this.bar) this.bar.remove();
       if (this.cfg.onDeath) this.cfg.onDeath(this);
       if (S.hud) S.hud.toast(this.name + ' — DEFEATED');
     }
@@ -3251,6 +3751,21 @@
         case 'sfx': S.sfx.play(data); break;
         case 'shake': FX.shake(data); break;
         case 'peril': if (S.hud) S.hud.peril(); break;
+        case 'glint': {
+          // the read cue: a cold flash on the weapon just before the strike lands
+          let p;
+          if (this.rig.weapon) {
+            p = new THREE.Vector3();
+            this.rig.weapon.tip.getWorldPosition(p);
+          } else {
+            p = this.chestPos();
+            p.x += Math.sin(this.yaw) * 0.9;
+            p.z += Math.cos(this.yaw) * 0.9;
+          }
+          FX.flare(p, 0xeef2ff, 1.0, 0.16);
+          S.sfx.play('clash');
+          break;
+        }
         case 'slamFx': {
           tmp.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
           const p = this.pos.clone().addScaledVector(tmp, 2.2);
@@ -3259,6 +3774,8 @@
           break;
         }
         case 'end': this.onClipEnd(data); break;
+        default:
+          if (this.cfg.onEvent) this.cfg.onEvent(this, name, data);
       }
     }
 
@@ -3280,7 +3797,9 @@
       this.state = 'attack';
       this.curAtk = a;
       this.attackActive = false;
-      this.anim.play(CL[a.clip], { speed: a.speed || 1 });
+      // heavy telegraphed windups for enemies — stretched once, then cached
+      if (!a._c) a._c = a.wind ? S.slowWindup(CL[a.clip], a.wind) : CL[a.clip];
+      this.anim.play(a._c, { speed: a.speed || 1 });
     }
 
     /* ---------- shared update ---------- */
@@ -3323,7 +3842,7 @@
         FX.dust(new THREE.Vector3(this.pos.x, 0.1, this.pos.z), 1);
         if (this.spawnT <= 0) { this.pos.y = 0; this.state = 'combat'; }
         this.anim.update(dt);
-        this.bar.set(this.hp, this.hpMax, this.posture, this.postureMax, this.vulnerable);
+        if (this.bar) this.bar.set(this.hp, this.hpMax, this.posture, this.postureMax, this.vulnerable);
         return;
       }
 
@@ -3335,6 +3854,9 @@
       if (this.status.stun > 0 && Math.random() < 0.2) {
         FX.spark(this.chestPos().setY(this.pos.y + (this.rig.height || 1.8)), 3, 0xffe97a, { speed: 2, gravity: 2 });
       }
+
+      // thaw
+      if (this._ice && this.status.freeze <= 0) this.thawIce();
 
       // stagger countdown
       if (this.state === 'stagger') {
@@ -3401,7 +3923,7 @@
       lo.phase += hsp * dt * (this.cfg.strideFreq || 2.4);
       this.anim.update(dt * (frozen ? 0.06 : this.status.slow > 0 ? 0.6 : 1));
 
-      this.bar.set(this.hp, this.hpMax, this.posture, this.postureMax, this.vulnerable);
+      if (this.bar) this.bar.set(this.hp, this.hpMax, this.posture, this.postureMax, this.vulnerable);
     }
   }
 
@@ -3437,9 +3959,9 @@
       buildRig: () => Rig.buildHumanoid(Rig.presets.zombie),
       speedMul: 1,
       attacks: [
-        { clip: 'zLunge', range: 2.4, reach: 1.75, arc: 1.1,
+        { clip: 'zLunge', range: 2.4, reach: 1.75, arc: 1.1, wind: 1.35,
           atk: { dmg: 9, posture: 12, selfPosture: 10, kb: 2 } },
-        { clip: 'zSwipe', range: 1.9, reach: 1.5, arc: 1.2,
+        { clip: 'zSwipe', range: 1.9, reach: 1.5, arc: 1.2, wind: 1.35,
           atk: { dmg: 7, posture: 10, selfPosture: 8, kb: 1 } },
       ],
       onDamaged(z, dmg) {
@@ -3476,9 +3998,11 @@
     const wtype = U.pick(['katana', 'greatsword', 'spear']);
     const W = S.WEAPONS[wtype];
     const heavy = wtype === 'greatsword';
-    const atkFor = (i) => ({
+    const atkCache = {};
+    const atkFor = (i) => atkCache[i] || (atkCache[i] = {
       clip: W.combo[i], range: W.reach + 0.5, reach: W.reach - 0.15, arc: W.arc,
-      speed: heavy ? 0.92 : 0.98,
+      speed: heavy ? 0.9 : 0.96,
+      wind: i === 0 ? 1.65 : 1.35, // long telegraphed opener, tighter follow-ups
       atk: {
         dmg: Math.round(W.dmg[i] * 0.85), posture: Math.round(W.posture[i] * 1.1),
         selfPosture: 22 + i * 4, kb: W.kb,
@@ -3562,21 +4086,21 @@
             if (roll < 0.42) {
               og.comboQueue = Math.random() < 0.5 ? 1 : 0;
               og.nextCombo = () => ({
-                clip: 'oPunchL', reach: 2.9, arc: 1.25,
+                clip: 'oPunchL', reach: 2.9, arc: 1.25, wind: 1.2,
                 atk: { dmg: 20, posture: 30, selfPosture: 28, kb: 6 },
               });
               og.startAttackClip({
-                clip: 'oPunchR', reach: 2.9, arc: 1.25,
+                clip: 'oPunchR', reach: 2.9, arc: 1.25, wind: 1.2,
                 atk: { dmg: 22, posture: 32, selfPosture: 30, kb: 7 },
               });
             } else if (roll < 0.75) {
               og.startAttackClip({
-                clip: 'oSlam', reach: 3.3, arc: 1.4,
+                clip: 'oSlam', reach: 3.3, arc: 1.4, wind: 1.15,
                 atk: { dmg: 30, posture: 46, selfPosture: 34, kb: 9, mult: 1 },
               });
             } else {
               og.startAttackClip({
-                clip: 'oPunchL', reach: 2.9, arc: 1.25,
+                clip: 'oPunchL', reach: 2.9, arc: 1.25, wind: 1.2,
                 atk: { dmg: 20, posture: 30, selfPosture: 28, kb: 6 },
               });
             }
@@ -3588,6 +4112,216 @@
       },
     };
     return new Enemy(scene, pos, cfg);
+  };
+
+  /* ================= BOSS — THE VEILED LANCER ================= */
+  /* Cloaked duelist: arrow volleys at range, long-spear pressure up close,
+     a perilous gap-closing skewer, and a leaping spear slam. */
+
+  CL.bBow = S.clip({ // draw, hold the aim, loose three
+    name: 'bBow', dur: 1.7, rate: 20,
+    keys: [
+      [0, { shL: [-0.35, 0, 0.3], elL: [-0.75, 0, 0], chest: [0.06, 0.28, 0] }],
+      [0.45, { shL: [-1.55, 0.1, 0.08], elL: [-0.12, 0, 0], wrL: [-0.2, 0, 0],
+               shR: [-1.2, 0, -0.25], elR: [-2.0, 0.3, 0], wrR: [-0.3, 0, 0],
+               chest: [0.04, 0.55, 0], spine: [0.02, 0.25, 0], neck: [-0.05, -0.4, 0],
+               hipL: [0.12, 0, 0.04], hipR: [-0.2, 0, -0.04], kneeR: [0.25, 0, 0],
+               y: -0.06 }, 'inout'],
+      [0.95, { shR: [-1.25, 0, -0.3], elR: [-2.05, 0.3, 0] }],
+      [1.05, { shR: [-1.05, 0, -0.7], elR: [-1.2, 0.2, 0], chest: [0.04, 0.5, 0] }, 'snap'],
+      [1.35, { shR: [-1.05, 0, -0.75], elR: [-1.1, 0.2, 0] }],
+      [1.7, { shL: [-0.35, 0, 0.3], elL: [-0.75, 0, 0], wrL: [0, 0, 0],
+              shR: [-0.55, 0, -0.15], elR: [-0.45, 0, 0], wrR: [-0.6, 0, 0],
+              chest: [0.06, 0.28, 0], spine: [0.04, 0.12, 0], neck: [0, 0, 0],
+              hipL: [0, 0, 0.03], hipR: [0, 0, -0.03], kneeR: [0.06, 0, 0], y: 0 }, 'inout'],
+    ],
+    events: [
+      [0.42, 'sfx', 'whoosh'],
+      [1.0, 'shoot', 0], [1.12, 'shoot', 1], [1.24, 'shoot', 2],
+    ],
+  });
+
+  CL.bLunge = S.clip({ // perilous skewer — coil low, then a missile
+    name: 'bLunge', dur: 1.8, rate: 22,
+    keys: [
+      [0, { shR: [-0.55, 0, -0.15], elR: [-0.45, 0, 0], chest: [0.06, 0.28, 0] }],
+      [0.55, { shR: [-0.15, 0, -0.4], elR: [-1.35, 0, 0], wrR: [-0.45, 0, 0],
+               shL: [-0.9, 0, 0.45], elL: [-1.25, 0, 0],
+               chest: [-0.08, 0.7, 0], spine: [-0.05, 0.32, 0], neck: [0.08, -0.4, 0],
+               kneeL: [0.55, 0, 0], kneeR: [0.55, 0, 0], hipL: [-0.35, 0, 0.05], hipR: [-0.35, 0, -0.05],
+               y: -0.2 }, 'inout'],
+      [0.9, { shR: [-0.1, 0, -0.45], y: -0.24 }],
+      [1.05, { shR: [-1.55, 0, 0.02], elR: [0, 0, 0], wrR: [-0.12, 0, 0],
+               shL: [-0.25, 0, 0.75], elL: [-0.35, 0, 0],
+               chest: [0.32, -0.35, 0], spine: [0.25, -0.18, 0], neck: [-0.28, 0.18, 0],
+               hipR: [-0.6, 0, -0.04], hipL: [0.4, 0, 0.04], kneeL: [0.7, 0, 0],
+               y: -0.16 }, 'snap'],
+      [1.25, { shR: [-1.6, 0, 0.02], chest: [0.34, -0.38, 0] }],
+      [1.8, { shR: [-0.55, 0, -0.15], elR: [-0.45, 0, 0], wrR: [-0.6, 0, 0],
+              shL: [-0.35, 0, 0.3], elL: [-0.75, 0, 0],
+              chest: [0.06, 0.28, 0], spine: [0.04, 0.12, 0], neck: [0, 0, 0],
+              hipR: [0, 0, -0.03], hipL: [0, 0, 0.03], kneeL: [0.06, 0, 0], kneeR: [0.06, 0, 0],
+              y: 0 }, 'inout'],
+    ],
+    events: [
+      [0.5, 'peril', null], [0.55, 'sfx', 'peril'],
+      [0.98, 'sfx', 'whooshBig'], [0.99, 'move', { f: 11 }],
+      [1.02, 'hitOn', null], [1.24, 'hitOff', null],
+    ],
+  });
+
+  CL.bLeap = S.clip({ // vaulting spear slam
+    name: 'bLeap', dur: 1.65, rate: 20,
+    keys: [
+      [0, { shR: [-0.55, 0, -0.15], chest: [0.06, 0.28, 0] }],
+      [0.4, { kneeL: [0.7, 0, 0], kneeR: [0.7, 0, 0], hipL: [-0.5, 0, 0.05], hipR: [-0.5, 0, -0.05],
+              chest: [0.3, 0.1, 0], spine: [0.2, 0, 0], shR: [-0.4, 0, -0.3],
+              y: -0.26 }, 'inout'],
+      [0.72, { shR: [-2.9, 0, -0.3], elR: [-0.4, 0, 0], wrR: [-0.3, 0, 0],
+               shL: [-1.4, 0, 0.5], elL: [-0.8, 0, 0],
+               chest: [-0.2, 0, 0], spine: [-0.12, 0, 0], neck: [0.2, 0, 0],
+               hipL: [-0.9, 0, 0.05], kneeL: [1.3, 0, 0], hipR: [-0.35, 0, -0.05], kneeR: [0.7, 0, 0],
+               y: 0.85 }, 'out'],
+      [1.0, { shR: [-0.6, 0, -0.1], elR: [-0.1, 0, 0], wrR: [-1.3, 0, 0],
+              shL: [0.35, 0, 0.4], elL: [-0.3, 0, 0],
+              chest: [0.52, 0, 0], spine: [0.36, 0, 0], neck: [-0.35, 0, 0],
+              hipL: [-0.55, 0, 0.05], kneeL: [0.85, 0, 0], hipR: [0.25, 0, -0.05], kneeR: [0.4, 0, 0],
+              y: -0.24 }, 'snap'],
+      [1.2, { chest: [0.54, 0, 0], y: -0.26 }],
+      [1.65, { shR: [-0.55, 0, -0.15], elR: [-0.45, 0, 0], wrR: [-0.6, 0, 0],
+               shL: [-0.35, 0, 0.3], elL: [-0.75, 0, 0],
+               chest: [0.06, 0.28, 0], spine: [0.04, 0.12, 0], neck: [0, 0, 0],
+               hipL: [0, 0, 0.03], hipR: [0, 0, -0.03], kneeL: [0.06, 0, 0], kneeR: [0.06, 0, 0],
+               y: 0 }, 'inout'],
+    ],
+    events: [
+      [0.66, 'sfx', 'jump'], [0.72, 'move', { f: 6.5 }],
+      [0.94, 'sfx', 'whooshBig'],
+      [0.97, 'hitOn', { mult: 1.2 }], [1.16, 'hitOff', null],
+      [1.02, 'shake', 0.35], [1.02, 'slamFx', null],
+    ],
+  });
+
+  E.spawnBoss = function (scene, pos) {
+    const W = S.WEAPONS.spear;
+    const atkCache = {};
+    const spearAtk = (i) => atkCache[i] || (atkCache[i] = {
+      clip: W.combo[i], range: W.reach + 0.5, reach: W.reach, arc: W.arc + 0.15,
+      speed: 1.02, wind: i === 0 ? 1.45 : 1.25,
+      atk: { dmg: 15 + i * 2, posture: 16 + i * 3, selfPosture: 26, kb: 3 },
+    });
+    const volley = { clip: 'bBow', range: 99, reach: 0, arc: 0.5, atk: { dmg: 0, posture: 0 } };
+    const lunge = {
+      clip: 'bLunge', range: 8, reach: 2.9, arc: 0.8,
+      atk: { dmg: 26, posture: 40, selfPosture: 0, kb: 9, unblockable: true },
+    };
+    const leap = {
+      clip: 'bLeap', range: 7, reach: 3.0, arc: 1.2,
+      atk: { dmg: 22, posture: 34, selfPosture: 30, kb: 6, mult: 1 },
+    };
+
+    const cfg = {
+      name: 'THE VEILED LANCER', hp: 380, posture: 170, boss: true, noBar: true,
+      radius: 0.55, chestH: 1.45, staggerDur: 3.6, cdMin: 0.8, cdMax: 1.8,
+      runSpeed: 4.6, flinchChance: 0.12, hyperarmor: true, mass: 1.3, postureRegen: 13,
+      stance: S.stances.spear,
+      buildRig: () => {
+        const r = Rig.buildHumanoid(Rig.presets.boss);
+        Rig.equipWeapon(r, 'spear');
+        Rig.equipBow(r);
+        Rig.addCloak(r, 0x272138, 0x9a7b30);
+        return r;
+      },
+      onEvent(bs, name, data) {
+        if (name === 'shoot') {
+          const p = bs.player;
+          if (!p || !p.alive) return;
+          const origin = bs.chestPos();
+          origin.x += Math.sin(bs.yaw) * 0.5;
+          origin.z += Math.cos(bs.yaw) * 0.5;
+          origin.y += 0.15;
+          const target = p.chestPos();
+          const dir = target.sub(origin).normalize();
+          // slight spread on the 2nd and 3rd arrow
+          if (data > 0) {
+            const a = Math.atan2(dir.x, dir.z) + U.rand(-0.06, 0.06) * data;
+            const horiz = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
+            dir.set(Math.sin(a) * horiz, dir.y, Math.cos(a) * horiz);
+          }
+          S.sfx.play('whoosh');
+          FX.flare(origin, 0xd8e8ff, 0.7, 0.12);
+          C.spawnProjectile({
+            pos: origin, dir, speed: 26, dmg: 12, posture: 14,
+            team: bs.team, source: bs, color: 0xe8dfc0, kind: 'shard',
+            radius: 0.38, life: 2.4, kb: 2,
+          });
+        }
+      },
+      onDeath(bs) {
+        FX.flare(bs.chestPos(), 0x6ee4ff, 4, 0.5);
+        FX.burstRing(bs.chestPos(), 0x6ee4ff, { to: 6, life: 0.5 });
+        FX.flash(bs.chestPos(), 0x6ee4ff, 6, 16, 0.5);
+        if (S.hud) S.hud.msg('忍殺', 'THE VEILED LANCER HAS FALLEN', 4);
+      },
+      think(bs, p, dt) {
+        const d = U.distXZ(bs.pos, p.pos);
+        if (bs.state === 'attack') return 0;
+
+        // reads the player like the swordsman, but sharper
+        if (p.state === 'attack' && !bs._readAtk && d < p.stats.reach + 1.6) {
+          bs._readAtk = true;
+          const roll = Math.random();
+          if (roll < 0.3) bs.parryT = 0.5;
+          else if (roll < 0.5) { bs.guarding = true; bs._guardT = U.rand(0.5, 0.9); }
+        }
+        if (p.state !== 'attack') bs._readAtk = false;
+        if (bs.guarding) {
+          bs._guardT -= dt;
+          if (bs._guardT <= 0) bs.guarding = false;
+        }
+
+        if (bs.attackCD <= 0 && !bs.guarding) {
+          const roll = Math.random();
+          if (d > 8.5) {
+            if (roll < 0.75) { bs.startAttackClip(volley); return 0; }
+          } else if (d > 4) {
+            if (roll < 0.4) { bs.startAttackClip(lunge); return 0; }
+            if (roll < 0.68) { bs.startAttackClip(leap); return 0; }
+            if (roll < 0.8) { bs.startAttackClip(volley); return 0; }
+          } else {
+            if (roll < 0.55) {
+              bs.comboQueue = U.randInt(1, 2);
+              let idx = 0;
+              bs.nextCombo = () => (idx + 1 < W.combo.length ? spearAtk(++idx) : null);
+              bs.startAttackClip(spearAtk(0));
+              return 0;
+            }
+            if (roll < 0.72) { bs.startAttackClip(lunge); return 0; }
+            if (roll < 0.88) {
+              // disengage hop, then it wants the bow
+              tmp.set(Math.sin(bs.yaw), 0, Math.cos(bs.yaw));
+              bs.vel.x -= tmp.x * 9; bs.vel.z -= tmp.z * 9;
+              bs.anim.play(CL.dashB);
+              S.sfx.play('dash');
+              bs.attackCD = 0.7;
+              return 0;
+            }
+          }
+        }
+
+        // spacing: lurk at mid range, drift sideways
+        if (d > 10) { bs.moveTarget = p.pos; return 4.6; }
+        if (Math.random() < dt * 0.6) bs.strafeDir *= -1;
+        const ang = U.yawTo(p.pos, bs.pos) + bs.strafeDir * 0.4;
+        const rr = Math.max(4.5, Math.min(d, 8));
+        bs.moveTarget = tmp.set(p.pos.x + Math.sin(ang) * rr, 0, p.pos.z + Math.cos(ang) * rr).clone();
+        return 2.4;
+      },
+    };
+    const b = new Enemy(scene, pos, cfg);
+    b.spawnT = 1.2;
+    b.iframes = 1.2;
+    return b;
   };
 })();
 
@@ -3674,6 +4408,7 @@
     interact: $('interact'), death: $('death'), start: $('start'), menu: $('menu'),
     powname: $('powname'),
     abs: { r: $('ab-r'), t: $('ab-t'), c: $('ab-c'), g: $('ab-g') },
+    bossbar: $('bossbar'), bossname: $('bossname'), bhp: $('bhp'), bpost: $('bpost'),
   };
   const dmgFlash = document.createElement('div');
   dmgFlash.style.cssText = 'position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 120px rgba(200,20,10,.85);opacity:0;transition:opacity .5s;';
@@ -3740,7 +4475,7 @@
   }
 
   const plates = [];
-  function addPlate(x, z, color, label, spawnFn) {
+  function addPlate(x, z, color, label, spawnFn, opts) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     const base = new THREE.Mesh(
@@ -3759,12 +4494,13 @@
     lab.position.y = 1.7;
     g.add(lab);
     scene.add(g);
-    plates.push({ g, btn, btnMat, cd: 0, spawnFn, label, pressed: 0 });
+    plates.push(Object.assign({ g, btn, btnMat, cd: 0, spawnFn, label, pressed: 0 }, opts || {}));
   }
 
   addPlate(-9, 9, 0x7ec850, 'ZOMBIE', (p) => E.spawnZombie(scene, p));
   addPlate(0, 13, 0x4f9fe8, 'SWORDSMAN', (p) => E.spawnSwordsman(scene, p));
   addPlate(9, 9, 0xd8452e, 'OGRE', (p) => E.spawnOgre(scene, p));
+  addPlate(0, 20, 0xd8b545, 'BOSS', (p) => E.spawnBoss(scene, p), { boss: true });
 
   function updatePlates(dt) {
     for (const pl of plates) {
@@ -3773,22 +4509,28 @@
       pl.btn.position.y = 0.14 - 0.07 * Math.min(1, pl.pressed);
       pl.btnMat.emissiveIntensity = pl.cd > 0 ? 0.08 : 0.35 + 0.15 * Math.sin(perfT * 3);
       if (pl.cd <= 0 && player.alive && U.distXZ(player.pos, pl.g.position) < 1.35 && player.pos.y < 0.4) {
+        if (pl.boss && enemies.some((e) => e.alive && e.cfg.boss)) {
+          hud.toast('THE LANCER ALREADY HUNTS YOU');
+          pl.cd = 1.5;
+          continue;
+        }
         if (enemies.filter((e) => e.alive).length >= 8) {
           hud.toast('THE ARENA IS FULL');
           pl.cd = 1.2;
           continue;
         }
-        pl.cd = 2.5;
+        pl.cd = pl.boss ? 4 : 2.5;
         pl.pressed = 1;
         S.sfx.play('step');
         // spawn away from the plate, toward the middle
         const dir = new THREE.Vector3(-pl.g.position.x, 0, -pl.g.position.z).normalize();
-        const pos = pl.g.position.clone().addScaledVector(dir, 4.5);
+        const pos = pl.g.position.clone().addScaledVector(dir, pl.boss ? 7 : 4.5);
         pos.x += U.rand(-1.5, 1.5); pos.z += U.rand(-1.5, 1.5);
         const en = pl.spawnFn(pos);
         enemies.push(en);
         C.actors.push(en);
-        hud.toast(en.name + ' HAS APPEARED');
+        if (pl.boss) hud.msg('THE VEILED LANCER', 'deflect the arrows — dodge the skewer', 3.5);
+        else hud.toast(en.name + ' HAS APPEARED');
       }
     }
   }
@@ -3882,6 +4624,22 @@
       };
       prow.appendChild(card);
     }
+    const orow = $('opt-row');
+    const slCard = document.createElement('div');
+    slCard.className = 'card' + (S.settings.shiftLock ? ' sel' : '');
+    const slBody = () =>
+      `<div class="t"><span class="em">🎯</span>Shift Lock — ${S.settings.shiftLock ? 'ON' : 'OFF'}</div>` +
+      '<div class="d">Camera-locked strafing. Your character always faces where the camera looks; ' +
+      'A/D sidestep instead of turning. The camera sits over the shoulder.</div>';
+    slCard.innerHTML = slBody();
+    slCard.onclick = () => {
+      S.settings.shiftLock = !S.settings.shiftLock;
+      slCard.classList.toggle('sel', S.settings.shiftLock);
+      slCard.innerHTML = slBody();
+      S.sfx.play('clash');
+    };
+    orow.appendChild(slCard);
+
     $('menu-close').onclick = closeMenu;
   }
 
@@ -3975,6 +4733,17 @@
       const cd = player.cds[k];
       el.abs[k].classList.toggle('oncd', cd > 0);
       if (cd > 0) el.abs[k].querySelector('.cd').textContent = Math.ceil(cd);
+    }
+    // boss bar
+    const boss = enemies.find((e) => e.cfg.boss && e.alive);
+    if (boss) {
+      el.bossbar.style.display = 'block';
+      el.bossname.textContent = boss.name;
+      el.bhp.style.width = (100 * U.clamp(boss.hp / boss.hpMax, 0, 1)) + '%';
+      el.bpost.style.width = (100 * U.clamp(boss.posture / boss.postureMax, 0, 1)) + '%';
+      el.bossbar.classList.toggle('vuln', boss.vulnerable);
+    } else {
+      el.bossbar.style.display = 'none';
     }
   }
 

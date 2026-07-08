@@ -245,8 +245,10 @@
       tmp.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
       this.vel.x = tmp.x * 5.5; this.vel.z = tmp.z * 5.5;
       this.meteorOnLand = opts.onLand;
+      this.meteorFx = true;
       this.anim.play(CL.airAtk, { speed: 0.6 });
-      FX.spark(this.pos, 16, 0xff7733, { speed: 6, up: 4 });
+      FX.flameBurst(this.pos.clone().setY(0.4), 5, { size: 0.6 });
+      FX.burstRing(this.pos.clone().setY(0.6), 0xff8833, { to: 2.2, life: 0.3 });
     }
 
     galeVault() {
@@ -268,12 +270,23 @@
       const dir = wish.lengthSq() > 0.01 ? wish.clone().normalize()
         : tmp2.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).clone();
       const from = this.chestPos();
+      FX.flare(from, 0xffe97a, 2, 0.2);
       FX.spark(from, 20, 0xffe97a, { speed: 6 });
+      FX.flash(from, 0xffe97a, 3, 8, 0.15);
       this.pos.x = U.clamp(this.pos.x + dir.x * dist, -ARENA_R, ARENA_R);
       this.pos.z = U.clamp(this.pos.z + dir.z * dist, -ARENA_R, ARENA_R);
       this.iframes = Math.max(this.iframes, 0.3);
       const to = this.chestPos();
       FX.bolt(from, to, 0xfff2a0);
+      // crackling afterimages along the path
+      for (let i = 1; i <= 3; i++) {
+        const p = from.clone().lerp(to, i / 4);
+        FX.spark(p, 5, 0xfff2a0, { speed: 3, gravity: 0, life: 0.3 });
+      }
+      FX.flare(to, 0xffffff, 1.4, 0.12);
+      FX.flare(to, 0xffe97a, 2.4, 0.22);
+      FX.burstRing(to, 0xfff2a0, { to: 2, life: 0.25 });
+      FX.flash(to, 0xffe97a, 4, 10, 0.2);
       FX.spark(to, 20, 0xffe97a, { speed: 6 });
       this.yaw = Math.atan2(dir.x, dir.z);
     }
@@ -477,12 +490,15 @@
         this.vel.x = this.dashVel.x; this.vel.z = this.dashVel.z;
         if (this.pdash) {
           if (this.pdash.fx === 'fire') {
-            FX.puff(this.pos.clone().setY(0.5), 2, 0xff7733, { size: 0.45, grow: 1.8, life: 0.4, alpha: 0.6 });
+            FX.flameBurst(this.pos.clone().setY(0.5), 2, { size: 0.5, noFlash: true });
+            if (Math.random() < 0.4) FX.flash(this.chestPos(), 0xff6622, 2, 6, 0.12);
             if (this.pdash.dmg) {
               C.meleeSweep(this, { reach: 1.4, arc: Math.PI, atk: { dmg: this.pdash.dmg, posture: 10 }, hitSet: this.pdash.hitSet });
             }
           } else if (this.pdash.fx === 'ice') {
-            FX.puff(this.pos.clone().setY(0.25), 2, 0x9fe0ff, { size: 0.4, grow: 1.4, life: 0.5, alpha: 0.5 });
+            FX.puff(this.pos.clone().setY(0.25), 2, 0xcfeeff, { size: 0.45, grow: 1.4, life: 0.55, alpha: 0.5 });
+            FX.spark(this.pos.clone().setY(0.3), 2, 0xdff4ff, { speed: 2, gravity: 2, life: 0.5 });
+            if (Math.random() < 0.3) FX.shards(this.pos.clone().setY(0.15), 0xcfeeff, 1, { speed: 2, size: 0.6, life: 0.5 });
           }
         }
         if (this.dashT <= 0) {
@@ -502,6 +518,11 @@
         // attacking / casting / staggered on the ground — bleed momentum
         this.vel.x = U.dampTo(this.vel.x, 0, 8, dt);
         this.vel.z = U.dampTo(this.vel.z, 0, 8, dt);
+      }
+
+      // meteor: burn on the way down
+      if (this.state === 'meteor' && !this.grounded && this.vel.y < 2) {
+        FX.flameBurst(this.chestPos(), 1, { size: 0.5, noFlash: true });
       }
 
       // gravity
@@ -539,9 +560,11 @@
       const engaged = this.state === 'attack' || this.state === 'cast' || this.guarding || this.parryT > 0;
       if (engaged && lock) targetYaw = U.yawTo(this.pos, lock.pos);
       else if (engaged) targetYaw = this.camYaw;
+      else if (S.settings.shiftLock && this.alive && this.state !== 'dash') targetYaw = this.camYaw;
       else if (hspeed > 0.6) targetYaw = Math.atan2(this.vel.x, this.vel.z);
       else if (this.guarding) targetYaw = this.camYaw;
-      const yawRate = this.state === 'attack' && this.anim.clipFrac < 0.4 ? 14 : (engaged ? 12 : 11);
+      const yawRate = this.state === 'attack' && this.anim.clipFrac < 0.4 ? 14
+        : (engaged ? 12 : S.settings.shiftLock ? 16 : 11);
       this.yaw = U.dampAngle(this.yaw, targetYaw, yawRate, dt);
       this.rig.group.rotation.y = this.yaw;
 
@@ -581,6 +604,11 @@
       const cp = this.camPitch;
       tmp.set(Math.sin(this.camYaw) * Math.cos(cp), Math.sin(cp), Math.cos(this.camYaw) * Math.cos(cp));
       const eye = tmp2.set(this.pos.x, this.pos.y + 1.55, this.pos.z);
+      if (S.settings.shiftLock) {
+        // over-the-shoulder offset
+        eye.x += -Math.cos(this.camYaw) * 0.75;
+        eye.z += Math.sin(this.camYaw) * 0.75;
+      }
       const desired = tmp3.copy(eye).addScaledVector(tmp, -4.4);
       desired.y = Math.max(0.35, desired.y);
       this.camPos.x = U.dampTo(this.camPos.x, desired.x, 30, dt);

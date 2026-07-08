@@ -30,6 +30,65 @@
   const MAX_NUMS = 26;
   const nums = [];
 
+  /* ---------------- flares (star sprites) ---------------- */
+  const MAX_FLARES = 20;
+  const flares = [];
+
+  /* ---------------- camera-facing burst rings ---------------- */
+  const MAX_BRINGS = 14;
+  const brings = [];
+
+  /* ---------------- point-light flashes ---------------- */
+  const MAX_FLASH = 6;
+  const flashes = [];
+
+  /* ---------------- mesh shards (ice chunks, debris) ---------------- */
+  const MAX_SHARDS = 36;
+  const shardPool = [];
+
+  function starTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.translate(64, 64);
+    // 4-point star flare: two crossed soft beams + hot core
+    for (const [w, l] of [[7, 62], [16, 30]]) {
+      for (let i = 0; i < 2; i++) {
+        const grad = g.createLinearGradient(-l, 0, l, 0);
+        grad.addColorStop(0, 'rgba(255,255,255,0)');
+        grad.addColorStop(0.5, 'rgba(255,255,255,.95)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grad;
+        g.fillRect(-l, -w / 2, l * 2, w);
+        g.rotate(Math.PI / 2);
+      }
+      g.rotate(Math.PI / 4);
+    }
+    const core = g.createRadialGradient(0, 0, 1, 0, 0, 22);
+    core.addColorStop(0, 'rgba(255,255,255,1)');
+    core.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = core;
+    g.fillRect(-22, -22, 44, 44);
+    return new THREE.CanvasTexture(c);
+  }
+
+  function ringTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.strokeStyle = 'rgba(255,255,255,.95)';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.arc(64, 64, 52, 0, Math.PI * 2);
+    g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.4)';
+    g.lineWidth = 16;
+    g.beginPath();
+    g.arc(64, 64, 52, 0, Math.PI * 2);
+    g.stroke();
+    return new THREE.CanvasTexture(c);
+  }
+
   function radialTexture() {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
@@ -90,6 +149,44 @@
       line.visible = false; line.frustumCulled = false;
       scene.add(line);
       bolts.push({ live: false, line, life: 0, max: 0.15 });
+    }
+
+    // flares
+    const starTex = starTexture();
+    for (let i = 0; i < MAX_FLARES; i++) {
+      const m = new THREE.SpriteMaterial({ map: starTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
+      const sp = new THREE.Sprite(m);
+      sp.visible = false;
+      scene.add(sp);
+      flares.push({ live: false, sp, life: 0, max: 1, size: 1 });
+    }
+
+    // camera-facing rings
+    const ringTex = ringTexture();
+    for (let i = 0; i < MAX_BRINGS; i++) {
+      const m = new THREE.SpriteMaterial({ map: ringTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
+      const sp = new THREE.Sprite(m);
+      sp.visible = false;
+      scene.add(sp);
+      brings.push({ live: false, sp, life: 0, max: 1, from: 0.2, to: 2 });
+    }
+
+    // light flashes
+    for (let i = 0; i < MAX_FLASH; i++) {
+      const li = new THREE.PointLight(0xffffff, 0, 8);
+      scene.add(li);
+      flashes.push({ live: false, li, life: 0, max: 1, intensity: 2 });
+    }
+
+    // shards
+    for (let i = 0; i < MAX_SHARDS; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.06, 0.22, 5),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
+      );
+      mesh.visible = false;
+      scene.add(mesh);
+      shardPool.push({ live: false, mesh, v: new THREE.Vector3(), ang: new THREE.Vector3(), life: 0, max: 1 });
     }
 
     // damage numbers
@@ -207,17 +304,114 @@
     n.v.set(U.rand(-0.3, 0.3), 2.2, 0);
   };
 
+  FX.flare = function (pos, color, size, life) {
+    const f = flares.find((x) => !x.live);
+    if (!f) return;
+    f.live = true;
+    f.sp.visible = true;
+    f.sp.position.copy(pos);
+    f.size = size || 1.2;
+    f.max = f.life = life || 0.22;
+    f.sp.material.color.set(color);
+    f.sp.material.rotation = U.rand(0, Math.PI);
+    f.sp.scale.set(f.size, f.size, 1);
+  };
+
+  FX.burstRing = function (pos, color, opts) {
+    opts = opts || {};
+    const r = brings.find((x) => !x.live);
+    if (!r) return;
+    r.live = true;
+    r.sp.visible = true;
+    r.sp.position.copy(pos);
+    r.from = opts.from || 0.25;
+    r.to = opts.to || 2.4;
+    r.max = r.life = opts.life || 0.3;
+    r.sp.material.color.set(color);
+  };
+
+  FX.flash = function (pos, color, intensity, dist, dur) {
+    const f = flashes.find((x) => !x.live);
+    if (!f) return;
+    f.live = true;
+    f.li.position.copy(pos);
+    f.li.color.set(color);
+    f.li.distance = dist || 9;
+    f.intensity = intensity || 3;
+    f.max = f.life = dur || 0.18;
+  };
+
+  FX.shards = function (pos, color, n, opts) {
+    opts = opts || {};
+    for (let k = 0; k < n; k++) {
+      const s = shardPool.find((x) => !x.live);
+      if (!s) return;
+      s.live = true;
+      s.mesh.visible = true;
+      s.mesh.position.copy(pos);
+      s.mesh.material.color.set(color);
+      s.mesh.material.opacity = 0.95;
+      const sc = (opts.size || 1) * U.rand(0.6, 1.6);
+      s.mesh.scale.set(sc, sc, sc);
+      const a = Math.random() * Math.PI * 2;
+      const sp = opts.speed || 5;
+      s.v.set(Math.cos(a) * U.rand(0.3, 1), U.rand(0.6, 1.6), Math.sin(a) * U.rand(0.3, 1)).multiplyScalar(sp);
+      s.ang.set(U.rand(-9, 9), U.rand(-9, 9), U.rand(-9, 9));
+      s.max = s.life = U.rand(0.4, opts.life || 0.8);
+    }
+  };
+
+  // branching lightning strike with impact flash
+  FX.boltStrike = function (from, to, color) {
+    color = color || 0xfff2a0;
+    FX.bolt(from, to, color);
+    for (let b = 0; b < 2; b++) {
+      const t = U.rand(0.3, 0.7);
+      const mid = new THREE.Vector3().lerpVectors(from, to, t);
+      mid.x += U.rand(-0.5, 0.5); mid.z += U.rand(-0.5, 0.5);
+      const end = mid.clone().add(new THREE.Vector3(U.rand(-2, 2), U.rand(-1.5, -0.4), U.rand(-2, 2)));
+      end.y = Math.max(0.1, end.y);
+      FX.bolt(mid, end, color);
+    }
+    FX.flare(to, 0xffffff, 1.6, 0.14);
+    FX.flare(to, color, 2.6, 0.2);
+    FX.burstRing(to, color, { to: 2.6, life: 0.28 });
+    FX.flash(to, color, 4, 11, 0.16);
+    FX.spark(to, 22, color, { speed: 9, up: 4 });
+  };
+
+  // two-tone fire: white-hot core, red tongues, rising embers
+  FX.flameBurst = function (pos, n, opts) {
+    opts = opts || {};
+    const sz = opts.size || 0.5;
+    FX.puff(pos, Math.ceil(n * 0.4), 0xffe8b0, { size: sz * 0.7, grow: 2.2, life: 0.25, alpha: 0.95, speed: opts.speed || 0.6, dir: opts.dir });
+    FX.puff(pos, n, 0xff6622, { size: sz, grow: 2.8, life: 0.4, alpha: 0.7, speed: opts.speed || 0.8, dir: opts.dir });
+    FX.puff(pos, Math.ceil(n * 0.5), 0xb02808, { size: sz * 1.2, grow: 3.2, life: 0.55, alpha: 0.45, speed: opts.speed || 0.9, dir: opts.dir });
+    FX.spark(pos, Math.ceil(n * 1.5), 0xffaa33, { speed: 3.5, up: 4, gravity: -4, drag: 2.2, life: 0.8 });
+    if (!opts.noFlash) FX.flash(pos, 0xff7733, 2.5, 8, 0.2);
+  };
+
   /* ---------------- composite effects ---------------- */
   FX.parrySparks = function (pos) {
-    FX.spark(pos, 42, 0xffcc33, { speed: 10, life: 0.5 });
-    FX.spark(pos, 16, 0xfff0aa, { speed: 14, life: 0.3 });
-    FX.puff(pos, 3, 0xffdd66, { size: 0.7, grow: 3.5, life: 0.25, alpha: 0.9, speed: 0.3 });
+    // the golden deflect: blinding star flash, ring shock, metal spray
+    FX.flare(pos, 0xffffff, 1.5, 0.12);
+    FX.flare(pos, 0xffd75e, 3.4, 0.24);
+    FX.burstRing(pos, 0xffe9a0, { from: 0.3, to: 3.2, life: 0.3 });
+    FX.burstRing(pos, 0xffc030, { from: 0.2, to: 1.8, life: 0.22 });
+    FX.flash(pos, 0xffd75e, 5, 12, 0.22);
+    FX.spark(pos, 55, 0xffcc33, { speed: 12, life: 0.55 });
+    FX.spark(pos, 24, 0xfff4c0, { speed: 17, life: 0.32 });
+    FX.spark(pos, 12, 0xffffff, { speed: 7, life: 0.7, gravity: 14 });
+    FX.puff(pos, 3, 0xffdd66, { size: 0.7, grow: 4, life: 0.22, alpha: 0.9, speed: 0.3 });
   };
   FX.blockSparks = function (pos) {
-    FX.spark(pos, 12, 0xc8c8d4, { speed: 6, life: 0.35 });
+    FX.flare(pos, 0xdfe4ee, 1.1, 0.13);
+    FX.spark(pos, 16, 0xc8c8d4, { speed: 7, life: 0.35 });
+    FX.spark(pos, 6, 0xffffff, { speed: 10, life: 0.2 });
     FX.puff(pos, 1, 0xaaaabb, { size: 0.4, grow: 2, life: 0.2, alpha: 0.5 });
   };
   FX.hitSparks = function (pos, big) {
+    if (big) FX.flare(pos, 0xff5533, 1.8, 0.16);
     FX.spark(pos, big ? 30 : 16, 0xff4433, { speed: big ? 9 : 6, life: 0.45 });
     FX.puff(pos, big ? 4 : 2, 0xcc2211, { size: big ? 0.7 : 0.45, grow: 2.4, life: 0.3, alpha: 0.7 });
   };
@@ -366,6 +560,50 @@
       b.life -= dt;
       if (b.life <= 0) { b.live = false; b.line.visible = false; continue; }
       b.line.material.opacity = b.life / b.max;
+    }
+
+    // flares
+    for (const f of flares) {
+      if (!f.live) continue;
+      f.life -= dt;
+      if (f.life <= 0) { f.live = false; f.sp.visible = false; continue; }
+      const t = 1 - f.life / f.max;
+      const sc = f.size * (0.4 + 0.9 * U.ease.out(t));
+      f.sp.scale.set(sc, sc, 1);
+      f.sp.material.opacity = 1 - t * t;
+    }
+
+    // burst rings
+    for (const r of brings) {
+      if (!r.live) continue;
+      r.life -= dt;
+      if (r.life <= 0) { r.live = false; r.sp.visible = false; continue; }
+      const t = 1 - r.life / r.max;
+      const sc = U.lerp(r.from, r.to, U.ease.out(t));
+      r.sp.scale.set(sc, sc, 1);
+      r.sp.material.opacity = 0.95 * (1 - t);
+    }
+
+    // light flashes
+    for (const f of flashes) {
+      if (!f.live) continue;
+      f.life -= dt;
+      if (f.life <= 0) { f.live = false; f.li.intensity = 0; continue; }
+      f.li.intensity = f.intensity * (f.life / f.max);
+    }
+
+    // shards
+    for (const s of shardPool) {
+      if (!s.live) continue;
+      s.life -= dt;
+      if (s.life <= 0) { s.live = false; s.mesh.visible = false; continue; }
+      s.v.y -= 16 * dt;
+      s.mesh.position.addScaledVector(s.v, dt);
+      if (s.mesh.position.y < 0.04) { s.mesh.position.y = 0.04; s.v.y *= -0.35; s.v.x *= 0.7; s.v.z *= 0.7; }
+      s.mesh.rotation.x += s.ang.x * dt;
+      s.mesh.rotation.y += s.ang.y * dt;
+      s.mesh.rotation.z += s.ang.z * dt;
+      s.mesh.material.opacity = Math.min(0.95, (s.life / s.max) * 2);
     }
 
     // numbers

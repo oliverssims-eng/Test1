@@ -52,6 +52,22 @@
   #powname { position:absolute; right:28px; bottom:98px; color:#cdbb92; font-size:12px;
              letter-spacing:2px; text-shadow:0 1px 3px #000; text-align:right; }
 
+  /* boss bar */
+  #bossbar { position:absolute; top:22px; left:50%; transform:translateX(-50%);
+             width:46%; min-width:380px; display:none; }
+  #bossname { color:#e8d9ae; font-family:serif; font-size:17px; letter-spacing:5px;
+              text-align:center; margin-bottom:5px; text-shadow:0 0 14px rgba(110,228,255,.45), 0 2px 4px #000; }
+  #bhp-wrap { height:12px; background:rgba(10,8,6,.72); border:1px solid #4a3c48;
+              border-radius:2px; overflow:hidden; }
+  #bhp { height:100%; width:100%; background:linear-gradient(#c96a5a,#8a2f2a);
+         transition:width .12s linear; }
+  #bpost-wrap { position:relative; height:7px; margin-top:3px; background:rgba(10,8,6,.65);
+                border:1px solid #4a3c28; border-radius:2px; }
+  #bpost { position:absolute; left:50%; top:0; bottom:0; width:0%;
+           background:linear-gradient(#ffd76a,#e09a1e); transform:translateX(-50%);
+           transition:width .1s linear; }
+  #bossbar.vuln #bpost { background:linear-gradient(#ff9a4a,#e0491e); }
+
   /* perilous kanji */
   #peril { position:absolute; left:50%; top:26%; transform:translate(-50%,-50%) scale(.6);
            color:#ff2a1a; font-size:84px; font-weight:900; opacity:0;
@@ -138,6 +154,12 @@
 <div id="hud">
   <div id="cross"></div>
 
+  <div id="bossbar">
+    <div id="bossname"></div>
+    <div id="bhp-wrap"><div id="bhp"></div></div>
+    <div id="bpost-wrap"><div id="bpost"></div></div>
+  </div>
+
   <div id="vitals">
     <div id="pname">WOLF UNIT-01</div>
     <div id="php-wrap"><div id="php"></div></div>
@@ -170,6 +192,8 @@
   <div class="row" id="weapon-row"></div>
   <h3>— SHINOBI ART —</h3>
   <div class="row" id="power-row"></div>
+  <h3>— OPTIONS —</h3>
+  <div class="row" id="opt-row"></div>
   <button class="close" id="menu-close">RETURN</button>
 </div>
 

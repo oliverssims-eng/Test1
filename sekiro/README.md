@@ -35,7 +35,7 @@ Click the title screen to lock the mouse. `Esc` releases it.
 | **F** | Jump — attack while rising or falling |
 | **E** | Interact (open the chest to restore vitality) |
 | **R / T / C / G** | The four abilities of your equipped power |
-| **M** | Loadout menu — choose weapon and power |
+| **M** | Loadout menu — weapon, power, and options (Shift Lock toggle) |
 
 ## The posture system
 
@@ -47,8 +47,13 @@ Click the title screen to lock the mouse. `Esc` releases it.
   wide open, and taking **2.2× damage** until they regain composure.
 - Posture drains over time — faster while healthy, faster still while
   actively blocking.
-- A red **危** kanji flashes for perilous attacks (the ogre's charging grab).
-  Those ignore both parry and block — dodge or jump.
+- A red **危** kanji flashes for perilous attacks (the ogre's charging grab,
+  the Lancer's skewer). Those ignore both parry and block — dodge or jump.
+- Enemy swings carry real weight: long, readable windups with a glint cue
+  just before the strike lands. Learn the rhythm, then deflect on the glint.
+- **Shift Lock** (in the M menu) switches to camera-locked strafing — your
+  character always faces where the camera looks and A/D sidestep, with an
+  over-the-shoulder camera.
 
 ## Weapons (M menu)
 
@@ -73,6 +78,10 @@ Click the title screen to lock the mouse. `Esc` releases it.
 - **Ogre** (red plate) — huge, ugly, slow. Haymakers and a double-fist slam
   that are brutally punishing unless parried, plus an unblockable perilous
   charge grab.
+- **BOSS: The Veiled Lancer** (gold plate) — a cloaked duelist with a bow
+  AND a long spear, and his own boss bar. Arrow volleys at range (deflect
+  them!), spear combos and a vaulting slam up close, and a perilous
+  gap-closing skewer that must be dodged. Only one can hunt you at a time.
 
 ## Tech
 
