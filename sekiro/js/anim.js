@@ -140,30 +140,50 @@
       return out;
     }
 
-    // walk / run cycle — big drive, counter-rotation, real bounce
-    const A = 0.95 * sp;             // leg swing
-    const bounce = Math.abs(cw);
+    // walk / run cycle — the entire body works: pelvis rolls, spine and
+    // chest counter-rotate and lean, shoulders drop into each stride, the
+    // head bobs against the chest, footfalls land with a sharp dip.
+    const A = 1.0 * sp;              // leg swing
+    const bounce = Math.pow(Math.abs(cw), 0.7); // sharper footfall
     const run = U.clamp((sp - 0.45) / 0.55, 0, 1); // extra sprint flavor
-    out.root = [0.07 * sp + 0.08 * run, 0.13 * sw * sp, loco.lean * 0.6 + 0.03 * sw * sp];
-    out.spine = [0.13 * sp, -0.11 * sw * sp, loco.lean * 0.35];
-    out.chest = [0.11 * sp + 0.08 * run, -0.18 * sw * sp, -0.02 * sw * sp];
-    out.neck = [-0.12 * sp, 0.16 * sw * sp, 0];
-    out.hipL = [A * sw, 0.03, 0.035 + 0.02 * cw * sp];
-    out.hipR = [-A * sw, -0.03, -0.035 + 0.02 * cw * sp];
-    out.kneeL = [Math.max(0.06, -A * 2.1 * cw), 0, 0];
-    out.kneeR = [Math.max(0.06, A * 2.1 * cw), 0, 0];
-    out.ankL = [-0.22 * sw * sp + 0.06, 0, 0];
-    out.ankR = [0.22 * sw * sp + 0.06, 0, 0];
-    out.shL = [-A * (0.9 + 0.35 * run) * sw, 0.05 * sw * sp, 0.10];
-    out.shR = [A * (0.9 + 0.35 * run) * sw, 0.05 * sw * sp, -0.10];
-    out.elL = [-0.4 * sp - Math.max(0, -sw) * (0.45 + 0.4 * run) * sp, 0, 0];
-    out.elR = [-0.4 * sp - Math.max(0, sw) * (0.45 + 0.4 * run) * sp, 0, 0];
-    out.wrL = [-0.15 * sp, 0, 0]; out.wrR = [-0.15 * sp, 0, 0];
-    out.y = -0.025 * sp + (0.055 + 0.03 * run) * bounce * sp * sp;
+    const sw2 = Math.sin(ph * 2);
+    out.root = [0.09 * sp + 0.10 * run, 0.17 * sw * sp, loco.lean * 0.6 + 0.06 * sw * sp];
+    out.spine = [0.14 * sp + 0.03 * sw2 * sp, -0.15 * sw * sp, loco.lean * 0.35 - 0.03 * sw * sp];
+    out.chest = [0.13 * sp + 0.10 * run - 0.03 * sw2 * sp, -0.26 * sw * sp, -0.06 * sw * sp];
+    out.neck = [-0.14 * sp + 0.04 * sw2 * sp, 0.24 * sw * sp, 0.05 * sw * sp];
+    out.hipL = [A * sw, 0.04, 0.04 + 0.03 * cw * sp];
+    out.hipR = [-A * sw, -0.04, -0.04 + 0.03 * cw * sp];
+    out.kneeL = [Math.max(0.06, -A * 2.2 * cw), 0, 0];
+    out.kneeR = [Math.max(0.06, A * 2.2 * cw), 0, 0];
+    out.ankL = [-0.26 * sw * sp + 0.07, 0, 0];
+    out.ankR = [0.26 * sw * sp + 0.07, 0, 0];
+    // shoulders: swing with the stride AND drop toward the planted side
+    out.shL = [-A * (1.0 + 0.4 * run) * sw, 0.08 * sw * sp, 0.10 + 0.10 * sw * sp];
+    out.shR = [A * (1.0 + 0.4 * run) * sw, 0.08 * sw * sp, -0.10 + 0.10 * sw * sp];
+    out.elL = [-0.45 * sp - Math.max(0, -sw) * (0.55 + 0.45 * run) * sp, 0, 0.05 * sp];
+    out.elR = [-0.45 * sp - Math.max(0, sw) * (0.55 + 0.45 * run) * sp, 0, -0.05 * sp];
+    out.wrL = [-0.2 * sp - 0.1 * sw * sp, 0, 0]; out.wrR = [-0.2 * sp + 0.1 * sw * sp, 0, 0];
+    out.y = -0.03 * sp + (0.06 + 0.045 * run) * bounce * sp * sp;
     return out;
   }
 
   const ZERO = [0, 0, 0];
+
+  const LEG_JOINTS = { hipL: 1, hipR: 1, kneeL: 1, kneeR: 1, ankL: 1, ankR: 1 };
+  const ARM_JOINTS = { shL: 1, shR: 1, elL: 1, elR: 1, wrL: 1, wrR: 1 };
+  function mergeCarry(pose, st, legW) {
+    for (const j in st) {
+      const s = st[j];
+      const l = pose[j] || ZERO;
+      if (LEG_JOINTS[j]) {
+        pose[j] = [U.lerp(l[0], s[0], legW), U.lerp(l[1], s[1], legW), U.lerp(l[2], s[2], legW)];
+      } else if (ARM_JOINTS[j]) {
+        pose[j] = [s[0] + l[0] * 0.35, s[1] + l[1] * 0.35, s[2] + l[2] * 0.35];
+      } else {
+        pose[j] = [s[0] + l[0], s[1] + l[1], s[2] + l[2]];
+      }
+    }
+  }
 
   /* ---------- Animator ---------- */
   S.Animator = class Animator {
@@ -204,9 +224,14 @@
       const pose = this._pose;
       locoPose(this.loco, this.time, pose);
 
-      // stance & overlay merge (over locomotion, under clips)
-      if (this.stance) for (const j in this.stance) pose[j] = this.stance[j];
-      if (this.overlay) for (const j in this.overlay) pose[j] = this.overlay[j];
+      // stance & overlay merge (over locomotion, under clips).
+      // Not a hard override: legs yield fully to the run cycle, the torso
+      // keeps its carry twist but rides the locomotion on top, and the
+      // weapon arms keep their grip while picking up a share of the swing.
+      const sp01 = this.loco.grounded ? this.loco.speed01 : 0.6;
+      const legW = 1 - U.clamp(sp01 * 3.5, 0, 1); // stance legs only while standing
+      if (this.stance) mergeCarry(pose, this.stance, legW);
+      if (this.overlay) mergeCarry(pose, this.overlay, legW);
 
       let rate = this.baseRate;
       if (this.clip) {
@@ -293,10 +318,12 @@
       shL: [0.05, 0, 0.14], elL: [-0.25, 0, 0],
       chest: [0.05, 0.12, 0], spine: [0.03, 0.06, 0],
     },
-    greatsword: { // rested on the right shoulder
-      shR: [-2.5, 0, -0.35], elR: [-0.5, 0, 0], wrR: [0.5, 0, 0],
-      shL: [0.1, 0, 0.18], elL: [-0.3, 0, 0],
-      chest: [0.02, 0.22, 0.05], spine: [0.02, 0.1, 0],
+    greatsword: { // low two-hand ready — blade angled ahead, body coiled to cleave
+      shR: [-0.85, 0.15, -0.38], elR: [-0.6, 0.1, 0], wrR: [0.95, 0, 0],
+      shL: [-0.72, 0, 0.45], elL: [-1.0, 0, 0], wrL: [-0.2, 0, 0],
+      chest: [0.1, 0.32, 0], spine: [0.06, 0.14, 0], neck: [-0.06, -0.22, 0],
+      hipL: [-0.1, 0.05, 0.03], hipR: [0.06, -0.05, -0.03],
+      kneeL: [0.14, 0, 0], kneeR: [0.12, 0, 0],
     },
     spear: { // couched at the hip: rear hand low, lead hand on the shaft, tip at the foe
       shR: [-0.42, 0.1, -0.28], elR: [-0.82, -0.15, 0], wrR: [-0.35, 0, 0],
@@ -408,6 +435,28 @@
                shL: [-0.8, 0, 0.7], y: -0.08 }, 'snap'],
       [0.28, { shR: [-1.8, -0.2, -0.9], chest: [-0.1, -0.35, -0.05] }],
       [0.55, {}, 'inout'],
+    ],
+  });
+
+  CL.deflectBig = clip({ // enemy got parried — weapon rings away, whole body whips back
+    name: 'deflectBig', dur: 0.8, rate: 26,
+    keys: [
+      [0, {}],
+      [0.06, { root: [-0.1, -0.2, -0.06], spine: [-0.28, -0.25, -0.06], chest: [-0.42, -0.45, -0.12],
+               neck: [0.5, 0.35, 0.1],
+               shR: [-2.5, -0.4, -1.35], elR: [-0.25, 0, 0], wrR: [-0.6, 0, 0],
+               shL: [-1.7, 0, 1.05], elL: [-0.4, 0, 0],
+               hipL: [0.35, 0, 0.08], hipR: [-0.2, 0, -0.08], kneeL: [0.3, 0, 0], kneeR: [0.55, 0, 0],
+               y: -0.08 }, 'snap'],
+      [0.30, { root: [-0.05, -0.1, -0.03], spine: [-0.15, -0.15, -0.03], chest: [-0.22, -0.3, -0.06],
+               neck: [0.3, 0.2, 0.05],
+               shR: [-2.1, -0.3, -1.1], shL: [-1.2, 0, 0.8],
+               y: -0.11 }],
+      [0.55, { root: [0, 0, 0], spine: [0.02, 0, 0], chest: [-0.05, -0.1, 0], neck: [0.1, 0.05, 0],
+               shR: [-1.2, -0.1, -0.6], shL: [-0.5, 0, 0.4], elL: [-0.3, 0, 0],
+               hipL: [0.1, 0, 0.04], hipR: [-0.05, 0, -0.04], kneeL: [0.15, 0, 0], kneeR: [0.2, 0, 0],
+               y: -0.05 }],
+      [0.8, {}, 'inout'],
     ],
   });
 
@@ -547,7 +596,7 @@
   CL.gs1 = clip({ // colossal cleave — the whole body torques into it, then over-spins
     name: 'gs1', dur: 1.0, rate: 22,
     keys: [
-      [0, { shR: [-2.5, 0, -0.35], elR: [-0.5, 0, 0], wrR: [0.5, 0, 0], chest: [0.02, 0.22, 0.05] }],
+      [0, { shR: [-0.85, 0.15, -0.38], elR: [-0.6, 0.1, 0], wrR: [0.95, 0, 0], shL: [-0.72, 0, 0.45], elL: [-1.0, 0, 0], chest: [0.1, 0.32, 0] }],
       [0.30, { root: [0.02, -0.5, 0.08], spine: [0.05, -0.42, 0.05], chest: [0.06, -0.95, 0.12],
                neck: [-0.02, 0.7, 0],
                shR: [-2.45, -0.35, -1.2], elR: [-0.4, 0, 0], wrR: [-0.5, 0, -0.5],
@@ -564,8 +613,8 @@
       [0.70, { root: [0.04, 0.72, -0.08], chest: [0.24, 1.12, -0.12],
                shR: [-1.2, 0.6, 1.2], neck: [-0.1, -0.75, 0], y: -0.13 }],
       [1.0, { root: [0, 0.05, 0], spine: [0.02, 0.1, 0], chest: [0.02, 0.22, 0.05], neck: [0, 0, 0],
-              shR: [-2.5, 0, -0.35], elR: [-0.5, 0, 0], wrR: [0.5, 0, 0],
-              shL: [0.1, 0, 0.18], elL: [-0.3, 0, 0],
+              shR: [-0.85, 0.15, -0.38], elR: [-0.6, 0.1, 0], wrR: [0.95, 0, 0],
+              shL: [-0.72, 0, 0.45], elL: [-1.0, 0, 0],
               hipR: [0, 0, -0.03], hipL: [0, 0, 0.03], kneeL: [0.06, 0, 0], kneeR: [0.06, 0, 0],
               y: 0 }, 'inout'],
     ],
@@ -578,7 +627,7 @@
   CL.gs2 = clip({ // earth-splitter — arch back to the sky, then fold the world in half
     name: 'gs2', dur: 1.1, rate: 22,
     keys: [
-      [0, { shR: [-2.5, 0, -0.35], elR: [-0.5, 0, 0], wrR: [0.5, 0, 0], chest: [0.02, 0.22, 0.05] }],
+      [0, { shR: [-0.85, 0.15, -0.38], elR: [-0.6, 0.1, 0], wrR: [0.95, 0, 0], shL: [-0.72, 0, 0.45], elL: [-1.0, 0, 0], chest: [0.1, 0.32, 0] }],
       [0.34, { root: [-0.1, 0, 0], spine: [-0.24, 0, 0], chest: [-0.38, 0, 0], neck: [0.35, 0, 0],
                shR: [-3.2, 0, -0.3], elR: [-0.4, 0, 0], wrR: [-0.15, 0, 0],
                shL: [-2.8, 0, 0.35], elL: [-0.55, 0, 0],
@@ -592,8 +641,8 @@
                y: -0.26 }, 'snap'],
       [0.74, { wrR: [-1.6, 0, 0], chest: [0.72, 0, 0], y: -0.28 }],
       [1.1, { root: [0, 0, 0], spine: [0.02, 0.1, 0], chest: [0.02, 0.22, 0.05], neck: [0, 0, 0],
-              shR: [-2.5, 0, -0.35], elR: [-0.5, 0, 0], wrR: [0.5, 0, 0],
-              shL: [0.1, 0, 0.18], elL: [-0.3, 0, 0],
+              shR: [-0.85, 0.15, -0.38], elR: [-0.6, 0.1, 0], wrR: [0.95, 0, 0],
+              shL: [-0.72, 0, 0.45], elL: [-1.0, 0, 0],
               hipL: [0, 0, 0.03], hipR: [0, 0, -0.03], kneeL: [0.06, 0, 0], kneeR: [0.06, 0, 0],
               y: 0 }, 'inout'],
     ],

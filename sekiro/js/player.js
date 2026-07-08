@@ -233,22 +233,65 @@
       this.dashCD = Math.max(this.dashCD, 0.3);
       this.iframes = Math.max(this.iframes, opts.iframes || 0);
       this.dashVel.copy(dir).multiplyScalar(opts.dist / opts.dur);
-      this.pdash = { fx: opts.fx, dmg: opts.dmg || 0, hitSet: new Set() };
+      this.pdash = {
+        fx: opts.fx, dmg: opts.dmg || 0, posture: opts.posture,
+        status: opts.status, onStep: opts.onStep, onEnd: opts.onEnd, hitSet: new Set(),
+      };
       this.yaw = Math.atan2(dir.x, dir.z);
-      this.anim.play(CL.dashF);
+      this.anim.play(CL[opts.anim || 'dashF']);
     }
 
+    // Generic leap-attack: airborne arc under `meteor` state, callback on landing.
+    // opts: { up, fwd, anim, animSpeed, onLand, trailFx(player) }
     meteorLeap(opts) {
       this.state = 'meteor';
       this.grounded = false;
-      this.vel.y = 10.5;
+      this.vel.y = opts.up !== undefined ? opts.up : 10.5;
+      const f = opts.fwd !== undefined ? opts.fwd : 5.5;
       tmp.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-      this.vel.x = tmp.x * 5.5; this.vel.z = tmp.z * 5.5;
+      this.vel.x = tmp.x * f; this.vel.z = tmp.z * f;
       this.meteorOnLand = opts.onLand;
-      this.meteorFx = true;
-      this.anim.play(CL.airAtk, { speed: 0.6 });
-      FX.flameBurst(this.pos.clone().setY(0.4), 5, { size: 0.6 });
-      FX.burstRing(this.pos.clone().setY(0.6), 0xff8833, { to: 2.2, life: 0.3 });
+      this.leapTrail = opts.trailFx || null;
+      this.anim.play(CL[opts.anim || 'airAtk'], { speed: opts.animSpeed || 0.6 });
+    }
+
+    // Scripted motion: the ability drives velocity/effects each frame.
+    // opts: { dur, iframes, anim, animSpeed, steer (m/s WASD control), spin (rad/s),
+    //         update(player, dt, t), onEnd(player) }
+    startScript(opts) {
+      this.state = 'script';
+      this.scriptT = 0;
+      this.script = opts;
+      this.attackActive = false;
+      this.guarding = false; this.anim.overlay = null;
+      if (opts.iframes) this.iframes = Math.max(this.iframes, opts.iframes);
+      if (opts.anim) this.anim.play(CL[opts.anim], { speed: opts.animSpeed || 1 });
+    }
+
+    blinkTo(pos, yaw, color) {
+      const from = this.chestPos();
+      this.pos.x = U.clamp(pos.x, -ARENA_R, ARENA_R);
+      this.pos.z = U.clamp(pos.z, -ARENA_R, ARENA_R);
+      if (yaw !== undefined) { this.yaw = yaw; this.camYawNudge = true; }
+      const to = this.chestPos();
+      if (color) {
+        FX.flare(from, color, 1.4, 0.15);
+        FX.flare(to, color, 1.8, 0.2);
+        FX.spark(to, 12, color, { speed: 5 });
+      }
+      this.iframes = Math.max(this.iframes, 0.25);
+    }
+
+    // nearest living enemies, sorted by distance; arc (optional) limits to a front cone
+    nearestEnemies(maxDist, arc) {
+      return C.enemiesOf('player')
+        .filter((e) => {
+          const d = U.distXZ(this.pos, e.pos);
+          if (d > maxDist) return false;
+          if (arc !== undefined && Math.abs(U.angDiff(this.yaw, U.yawTo(this.pos, e.pos))) > arc) return false;
+          return true;
+        })
+        .sort((a, b) => U.distXZ(this.pos, a.pos) - U.distXZ(this.pos, b.pos));
     }
 
     galeVault() {
@@ -297,8 +340,8 @@
       const ab = kit.abilities[key];
       if (!ab) return;
       if (ab.instant) {
-        // mobility arts fire even midair (gale vault IS the double jump)
-        if (!(this.canAct || (!this.grounded && ab.mobility && this.state !== 'dead'))) return;
+        // air-flagged arts fire even midair (gale vault IS the double jump)
+        if (!(this.canAct || (!this.grounded && (ab.mobility || ab.air) && this.state !== 'dead'))) return;
         this.cds[key] = ab.cd;
         ab.exec(this);
       } else {
@@ -492,19 +535,43 @@
           if (this.pdash.fx === 'fire') {
             FX.flameBurst(this.pos.clone().setY(0.5), 2, { size: 0.5, noFlash: true });
             if (Math.random() < 0.4) FX.flash(this.chestPos(), 0xff6622, 2, 6, 0.12);
-            if (this.pdash.dmg) {
-              C.meleeSweep(this, { reach: 1.4, arc: Math.PI, atk: { dmg: this.pdash.dmg, posture: 10 }, hitSet: this.pdash.hitSet });
-            }
           } else if (this.pdash.fx === 'ice') {
             FX.puff(this.pos.clone().setY(0.25), 2, 0xcfeeff, { size: 0.45, grow: 1.4, life: 0.55, alpha: 0.5 });
             FX.spark(this.pos.clone().setY(0.3), 2, 0xdff4ff, { speed: 2, gravity: 2, life: 0.5 });
             if (Math.random() < 0.3) FX.shards(this.pos.clone().setY(0.15), 0xcfeeff, 1, { speed: 2, size: 0.6, life: 0.5 });
+          } else if (this.pdash.fx === 'wind') {
+            FX.spark(this.chestPos(), 3, 0xc8ffd8, { speed: 3, gravity: 0, drag: 0.5, life: 0.4 });
+            FX.puff(this.pos.clone().setY(0.9), 1, 0xd8ffe8, { size: 0.4, grow: 1.8, life: 0.3, alpha: 0.4 });
           }
+          if (this.pdash.dmg) {
+            C.meleeSweep(this, {
+              reach: 1.5, arc: Math.PI, hitSet: this.pdash.hitSet,
+              atk: { dmg: this.pdash.dmg, posture: this.pdash.posture || 10, status: this.pdash.status },
+            });
+          }
+          if (this.pdash.onStep) this.pdash.onStep(this, dt);
         }
         if (this.dashT <= 0) {
           this.state = 'free';
+          const pd = this.pdash;
           this.pdash = null;
           this.vel.x *= 0.3; this.vel.z *= 0.3;
+          if (pd && pd.onEnd) pd.onEnd(this);
+        }
+      } else if (this.state === 'script' && this.script) {
+        this.scriptT += dt;
+        const sc = this.script;
+        if (sc.steer) {
+          const wish = this.moveWish(tmp);
+          this.vel.x = U.dampTo(this.vel.x, wish.x * sc.steer, 10, dt);
+          this.vel.z = U.dampTo(this.vel.z, wish.z * sc.steer, 10, dt);
+        }
+        if (sc.spin) this.yaw += sc.spin * dt;
+        if (sc.update) sc.update(this, dt, this.scriptT);
+        if (this.scriptT >= sc.dur) {
+          this.state = 'free';
+          this.script = null;
+          if (sc.onEnd) sc.onEnd(this);
         }
       } else if (this.alive && (this.state === 'free' || this.state === 'guard' || this.state === 'meteor' || (this.state === 'attack' && !this.grounded))) {
         const wish = this.moveWish(tmp);
@@ -513,7 +580,8 @@
         const sprinting = S.input.keys['shift'] && !this.guarding;
         const speedCap = this.guarding ? WALK * 0.75 : sprinting ? SPRINT : WALK;
         const target = paused ? tmp2.set(0, 0, 0) : tmp2.copy(wish).multiplyScalar(speedCap);
-        const rate = inAir ? 6 : (wish.lengthSq() > 0.01 ? 7.5 : 5);
+        // leap attacks are ballistic — keep their launch momentum in the air
+        const rate = this.state === 'meteor' ? 0.4 : inAir ? 6 : (wish.lengthSq() > 0.01 ? 7.5 : 5);
         this.vel.x = U.dampTo(this.vel.x, target.x, rate, dt);
         this.vel.z = U.dampTo(this.vel.z, target.z, rate, dt);
       } else {
@@ -522,10 +590,8 @@
         this.vel.z = U.dampTo(this.vel.z, 0, 8, dt);
       }
 
-      // meteor: burn on the way down
-      if (this.state === 'meteor' && !this.grounded && this.vel.y < 2) {
-        FX.flameBurst(this.chestPos(), 1, { size: 0.5, noFlash: true });
-      }
+      // leap trail fx
+      if (this.state === 'meteor' && !this.grounded && this.leapTrail) this.leapTrail(this);
 
       // gravity
       if (!this.grounded) {
@@ -559,8 +625,10 @@
 
       /* ---------- facing ---------- */
       let targetYaw = this.yaw;
+      const spinning = this.state === 'script' && this.script && this.script.spin;
       const engaged = this.state === 'attack' || this.state === 'cast' || this.guarding || this.parryT > 0;
-      if (engaged && lock) targetYaw = U.yawTo(this.pos, lock.pos);
+      if (spinning) targetYaw = this.yaw; // the script owns the spin
+      else if (engaged && lock) targetYaw = U.yawTo(this.pos, lock.pos);
       else if (engaged) targetYaw = this.camYaw;
       else if (S.settings.shiftLock && this.alive && this.state !== 'dash') targetYaw = this.camYaw;
       else if (hspeed > 0.6) targetYaw = Math.atan2(this.vel.x, this.vel.z);

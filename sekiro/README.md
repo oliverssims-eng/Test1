@@ -52,6 +52,8 @@ Click the title screen to lock the mouse. `Esc` releases it.
   the Lancer's skewer). Those ignore both parry and block — dodge or jump.
 - Enemy swings carry real weight: long, readable windups with a glint cue
   just before the strike lands. Learn the rhythm, then deflect on the glint.
+- A deflected enemy visibly loses their stance for a beat — weapon rung wide,
+  body whipped back, shoved off the clash — before they recompose.
 - **Shift Lock** (in the M menu) switches to camera-locked strafing — your
   character always faces where the camera looks and A/D sidestep, with an
   over-the-shoulder camera.
@@ -59,15 +61,28 @@ Click the title screen to lock the mouse. `Esc` releases it.
 ## Weapons (M menu)
 
 - **Katana** — fast three-cut combo, lives on the deflect.
-- **Great Sword** — two colossal swings, huge posture damage, carried on the shoulder.
+- **Great Sword** — two colossal swings, huge posture damage, held in a low two-hand guard.
 - **Spear** — longest reach, couched at the hip like a real spear: snap thrust, stepping thrust, then a lunging skewer. Air attack becomes a dive-bomb skewer.
 
-## Powers (M menu) — each kit binds R, T, C, G with at least one mobility art
+## Powers (M menu) — every art MOVES you, and no two elements play alike
 
-- **Fire** — Fire Bolt, Flame Wave, *Cinder Dash* (mobility), Meteor Fall (mobility + slam).
-- **Ice** — Ice Lance (slows), Frost Nova (freezes), *Frost Glide* (mobility), Glacial Spikes.
-- **Wind** — Wind Cutter, Vacuum Pull, *Gale Vault* (mobility — works midair as a double jump), Tempest.
-- **Lightning** — Thunder Bolt, Static Burst (stuns), *Flash Step* (mobility — 9m blink), Judgment.
+- **Fire — relentless advance.** Blazing Crescent (dash-leap with the blade
+  ablaze, crashing down in a burning crescent), Flame Waltz (dance through up
+  to 3 enemies, one burning slash each), *Cinder Trail* (mobility — the dash
+  leaves a wall of fire), Vesuvius (rocket up, come down as an eruption that
+  keeps burning).
+- **Ice — the flowing glacier.** Frozen Lunge (glide in and ram the point
+  home, freezing), Crystal Pirouette (steerable spinning glide ending in a
+  flash-freeze), *Frost Glide* (mobility), Winter's Rampart (backflip away as
+  a wall of ice spikes erupts where you stood).
+- **Wind — master of the sky.** Sky Dancer (rising spiral slash that launches
+  YOU — works midair), Swallow Dive (pass untouchably straight through them,
+  ending behind with your blade turned), *Gale Vault* (mobility — double
+  jump), Maelstrom (BECOME the tornado for 1.6s, steered with WASD).
+- **Lightning — the instant.** Thunder Pierce (flash through the nearest
+  enemy, reappearing behind mid-slash), Storm Circuit (chain-blink through up
+  to 4 enemies, striking each), *Flash Step* (mobility — 9m blink), Heaven's
+  Wrath (ascend on a thunderhead raining bolts, then crash down as one).
 
 ## Enemies — step on a plate to summon
 

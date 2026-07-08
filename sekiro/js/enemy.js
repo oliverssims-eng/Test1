@@ -165,13 +165,21 @@
     }
 
     onParrySuccess(attacker, point) { /* enemy deflected the player */ }
-    onDeflected() {
-      // our swing was deflected — recoil, combo dropped
+    onDeflected(defender) {
+      // our swing was deflected — the whole body whips back for a beat
       this.attackActive = false;
       this.comboQueue = 0;
       this.state = 'combat';
-      this.attackCD = Math.max(this.attackCD, U.rand(0.7, 1.3));
-      this.anim.play(CL.deflected, { speed: this.cfg.big ? 0.7 : 1 });
+      this.attackCD = Math.max(this.attackCD, U.rand(0.8, 1.4));
+      this.anim.play(CL.deflectBig, { speed: this.cfg.big ? 0.65 : 1.05 });
+      // physically shoved off the clash
+      if (defender && defender.pos) {
+        tmp.subVectors(this.pos, defender.pos).setY(0).normalize();
+        this.applyKnockback(tmp, 3.5);
+      }
+      FX.flare(this.chestPos(), 0xfff0c0, 1.2, 0.15);
+      // parried mid-combo with posture running hot — visibly rattled longer
+      if (this.posture > this.postureMax * 0.6) this.attackCD += 0.5;
     }
     onBlocked() { /* player blocked us — attack continues */ }
     onBlockedHit() { this.anim.play(CL.blockHit); }
