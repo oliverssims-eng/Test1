@@ -21,13 +21,13 @@
     },
     spear: {
       name: 'Spear', em: '🔱',
-      desc: 'Longest reach on the field. Thrust, sweep, then a lunging skewer.',
+      desc: 'Longest reach on the field. Couched at the hip — snap thrust, stepping thrust, then a lunging skewer.',
       combo: ['sp1', 'sp2', 'sp3'], dmg: [14, 15, 19], posture: [12, 12, 18],
-      selfPosture: 14, reach: 3.35, arc: 0.95, kb: 2.5,
+      selfPosture: 14, reach: 3.35, arc: 0.8, kb: 2.5,
     },
   });
 
-  const GRAV = 24, RUN = 5.8, ACCEL = 42, DECEL = 26;
+  const GRAV = 24, WALK = 3.6, SPRINT = 6.6;
   const ARENA_R = 42;
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmp3 = new THREE.Vector3();
 
@@ -195,7 +195,7 @@
     airAttack() {
       this.state = 'attack';
       this.airAtk = true;
-      this.anim.play(CL.airAtk);
+      this.anim.play(this.weaponType === 'spear' ? CL.airThrust : CL.airAtk);
     }
 
     tryDash() {
@@ -509,9 +509,11 @@
       } else if (this.alive && (this.state === 'free' || this.state === 'guard' || this.state === 'meteor' || (this.state === 'attack' && !this.grounded))) {
         const wish = this.moveWish(tmp);
         const inAir = !this.grounded;
-        const speedCap = this.guarding ? RUN * 0.45 : RUN;
+        // hold shift to sprint — works in every direction
+        const sprinting = S.input.keys['shift'] && !this.guarding;
+        const speedCap = this.guarding ? WALK * 0.75 : sprinting ? SPRINT : WALK;
         const target = paused ? tmp2.set(0, 0, 0) : tmp2.copy(wish).multiplyScalar(speedCap);
-        const rate = inAir ? 6 : (wish.lengthSq() > 0.01 ? ACCEL / RUN : DECEL / RUN);
+        const rate = inAir ? 6 : (wish.lengthSq() > 0.01 ? 7.5 : 5);
         this.vel.x = U.dampTo(this.vel.x, target.x, rate, dt);
         this.vel.z = U.dampTo(this.vel.z, target.z, rate, dt);
       } else {
@@ -589,7 +591,7 @@
       const lo = this.anim.loco;
       lo.grounded = this.grounded;
       lo.vy = this.vel.y;
-      lo.speed01 = U.clamp(hspeed / RUN, 0, 1);
+      lo.speed01 = U.clamp(hspeed / SPRINT, 0, 1);
       lo.phase += hspeed * dt * 2.4;
       lo.lean = U.clamp(U.angDiff(this.yaw, targetYaw) * 0.4, -0.25, 0.25);
       this.anim.update(dt);

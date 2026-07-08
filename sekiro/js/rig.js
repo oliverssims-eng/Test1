@@ -253,6 +253,13 @@
   };
 
   // Attach weapon to a rig's right hand with a natural carry angle.
+  // Swords sit across the palm, blade forward; the spear is couched — the
+  // shaft runs along the forearm line so extending the arm IS the thrust.
+  const mountCfg = {
+    katana: { pos: [0, -0.10, 0.03], rotX: 1.45 },
+    greatsword: { pos: [0, -0.10, 0.03], rotX: 1.45 },
+    spear: { pos: [0, -0.14, 0.055], rotX: 3.05 },
+  };
   Rig.equipWeapon = function (rig, type) {
     if (rig.weaponMount) {
       rig.handR.remove(rig.weaponMount);
@@ -261,8 +268,9 @@
     if (!type) return null;
     const w = Rig.makeWeapon(type);
     const mount = new THREE.Group();
-    mount.position.set(0, -0.10, 0.03);
-    mount.rotation.x = 1.45; // blade forward when arm hangs
+    const mc = mountCfg[type] || mountCfg.katana;
+    mount.position.set(mc.pos[0], mc.pos[1], mc.pos[2]);
+    mount.rotation.x = mc.rotX;
     mount.add(w.group);
     rig.handR.add(mount);
     rig.weaponMount = mount;

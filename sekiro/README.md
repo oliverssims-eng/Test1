@@ -27,6 +27,7 @@ Click the title screen to lock the mouse. `Esc` releases it.
 | Input | Action |
 | --- | --- |
 | WASD | Move (camera-relative) |
+| **Shift (hold)** | Sprint — works in any direction |
 | Mouse | Third-person camera |
 | **Mouse 1** | Swing weapon — chains into combos; works midair as an air attack |
 | **Mouse 2 (tap)** | **Parry** — small window; a successful deflect throws yellow sparks and spikes the attacker's posture |
@@ -59,7 +60,7 @@ Click the title screen to lock the mouse. `Esc` releases it.
 
 - **Katana** — fast three-cut combo, lives on the deflect.
 - **Great Sword** — two colossal swings, huge posture damage, carried on the shoulder.
-- **Spear** — longest reach, thrust / sweep / lunging skewer.
+- **Spear** — longest reach, couched at the hip like a real spear: snap thrust, stepping thrust, then a lunging skewer. Air attack becomes a dive-bomb skewer.
 
 ## Powers (M menu) — each kit binds R, T, C, G with at least one mobility art
 
