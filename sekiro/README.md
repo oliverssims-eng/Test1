@@ -7,11 +7,18 @@ stepping on plates. Runs in any modern browser with no build step.
 
 ## How to run
 
-Three.js is vendored in `../vendor/`, so nothing to install:
-
-- **Easiest:** open `sekiro/index.html` directly in Chrome/Edge/Firefox.
+- **Easiest — single file:** download
+  [`ShinobiProtocol.html`](../ShinobiProtocol.html) from the repo root and
+  double-click it. Everything (Three.js included) is bundled inside; it works
+  offline with no install and no server.
+- **From a clone:** open `sekiro/index.html` directly in
+  Chrome/Edge/Firefox (Three.js is vendored in `../vendor/`).
 - **Or serve it:** `python3 -m http.server` from the repo root, then open
   <http://localhost:8000/sekiro/>.
+
+To rebuild the single file after editing `sekiro/`, run the inline script in
+the repo root: it replaces each `<script src>` in `sekiro/index.html` with the
+file's contents and writes `ShinobiProtocol.html`.
 
 Click the title screen to lock the mouse. `Esc` releases it.
 

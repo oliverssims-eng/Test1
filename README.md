@@ -3,7 +3,9 @@
 Three standalone browser games live in this repo:
 
 - **Shinobi Protocol** (`sekiro/`) — 3D Sekiro-like posture/parry combat
-  sandbox. Open `sekiro/index.html`; see
+  sandbox. **Just want to play? Download the all-in-one
+  [`ShinobiProtocol.html`](ShinobiProtocol.html) and double-click it** — no
+  install, works offline. Source lives in `sekiro/`; see
   [`sekiro/README.md`](sekiro/README.md) for controls and mechanics.
 - **Voxel Monk Fighter** (repo root) — 3D third-person voxel brawler. See below.
 - **GRIMVEIL** (`card-game/`) — a gloomy 2D pixel-art card battler. Open
