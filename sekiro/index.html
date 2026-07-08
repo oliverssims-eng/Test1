@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shinobi Protocol — Sekiro-like Combat Sandbox</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#000;
+               font-family:"Segoe UI", Arial, sans-serif; user-select:none; }
+  #game { display:block; width:100%; height:100%; }
+  #hud { position:fixed; inset:0; pointer-events:none; overflow:hidden; }
+
+  /* crosshair */
+  #cross { position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px;
+           border-radius:50%; background:rgba(255,255,255,.65);
+           box-shadow:0 0 4px rgba(0,0,0,.8); }
+
+  /* player vitals (bottom left, Sekiro style) */
+  #vitals { position:absolute; left:26px; bottom:26px; width:34%; min-width:300px; }
+  #php-wrap { height:14px; background:rgba(10,8,6,.7); border:1px solid #443a28;
+              border-radius:2px; overflow:hidden; }
+  #php { height:100%; width:100%; background:linear-gradient(#d8b26a,#a4712c);
+         transition:width .1s linear; }
+  #php-ghost { height:3px; margin-top:-3px; background:rgba(255,80,50,.6); width:100%;
+               transition:width .6s ease-out; }
+  #pname { color:#cdbb92; font-size:12px; letter-spacing:2px; margin-bottom:4px;
+           text-shadow:0 1px 3px #000; }
+
+  /* player posture (bottom center) */
+  #posture-wrap { position:absolute; left:50%; bottom:34px; width:300px; margin-left:-150px;
+                  height:10px; background:rgba(10,8,6,.65); border:1px solid #4a3c20;
+                  border-radius:2px; }
+  #posture { position:absolute; left:50%; top:0; bottom:0; width:0%;
+             background:linear-gradient(#ffd76a,#e09a1e); transform:translateX(-50%);
+             transition:width .08s linear; }
+  #posture-wrap.hot #posture { background:linear-gradient(#ff9a4a,#e0491e); }
+  #posture-tick { position:absolute; left:50%; top:-3px; bottom:-3px; width:2px;
+                  margin-left:-1px; background:#c9b98a; }
+
+  /* ability icons bottom right */
+  #abilities { position:absolute; right:26px; bottom:26px; display:flex; gap:10px; }
+  .ab { position:relative; width:64px; height:64px; background:rgba(12,10,8,.75);
+        border:1px solid #58472a; border-radius:6px; color:#e8dcbf; overflow:hidden; }
+  .ab .key { position:absolute; top:3px; left:6px; font-size:13px; font-weight:800;
+             color:#ffd76a; text-shadow:0 1px 2px #000; }
+  .ab .nm { position:absolute; bottom:4px; left:0; right:0; text-align:center;
+            font-size:9px; letter-spacing:.5px; opacity:.9; }
+  .ab .ic { position:absolute; top:50%; left:50%; transform:translate(-50%,-58%);
+            font-size:24px; }
+  .ab .cd { position:absolute; inset:0; background:rgba(0,0,0,.72); display:none;
+            color:#fff; font-size:20px; font-weight:700; text-align:center; line-height:64px; }
+  .ab.oncd .cd { display:block; }
+  #powname { position:absolute; right:28px; bottom:98px; color:#cdbb92; font-size:12px;
+             letter-spacing:2px; text-shadow:0 1px 3px #000; text-align:right; }
+
+  /* perilous kanji */
+  #peril { position:absolute; left:50%; top:26%; transform:translate(-50%,-50%) scale(.6);
+           color:#ff2a1a; font-size:84px; font-weight:900; opacity:0;
+           text-shadow:0 0 18px rgba(255,40,20,.9), 0 0 4px #000; font-family:serif; }
+  #peril.show { animation:perilPop .55s ease-out; }
+  @keyframes perilPop {
+    0% { opacity:0; transform:translate(-50%,-50%) scale(.5); }
+    18% { opacity:1; transform:translate(-50%,-50%) scale(1.15); }
+    60% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+    100% { opacity:0; transform:translate(-50%,-50%) scale(1); }
+  }
+
+  /* big center messages */
+  #msg { position:absolute; top:30%; width:100%; text-align:center; color:#e8d9ae;
+         font-size:56px; font-weight:800; letter-spacing:10px; opacity:0;
+         text-shadow:0 0 24px rgba(220,170,60,.55), 0 3px 10px rgba(0,0,0,.9);
+         transition:opacity .4s; font-family:serif; }
+  #submsg { position:absolute; top:42%; width:100%; text-align:center; color:#cbb;
+            font-size:18px; letter-spacing:2px; text-shadow:0 2px 6px #000; opacity:0;
+            transition:opacity .4s; }
+  #death { position:absolute; inset:0; background:rgba(20,0,0,0); display:none;
+           transition:background 1.2s; }
+  #death .kanji { position:absolute; left:50%; top:38%; transform:translate(-50%,-50%);
+                  color:#c41f10; font-size:170px; font-family:serif; font-weight:900;
+                  text-shadow:0 0 40px rgba(200,30,10,.8); opacity:0; transition:opacity 1.4s; }
+  #death .sub { position:absolute; left:50%; top:60%; transform:translateX(-50%);
+                color:#caa; font-size:18px; letter-spacing:4px; opacity:0; transition:opacity 1.4s; }
+  #death.show { background:rgba(15,0,0,.72); display:block; }
+  #death.show .kanji, #death.show .sub { opacity:1; }
+
+  /* interact prompt */
+  #interact { position:absolute; left:50%; top:56%; transform:translateX(-50%);
+              color:#ffe9b0; font-size:16px; letter-spacing:1px; display:none;
+              background:rgba(0,0,0,.5); padding:6px 14px; border-radius:4px;
+              border:1px solid #6b5a30; }
+
+  /* start screen */
+  #start { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 40%, #2a2620 0%, #0c0a08 75%);
+           display:flex; flex-direction:column; align-items:center; justify-content:center;
+           pointer-events:auto; cursor:pointer; z-index:20; }
+  #start h1 { color:#e8d9ae; font-size:54px; letter-spacing:14px; font-family:serif;
+              margin:0 0 6px 0; text-shadow:0 0 30px rgba(220,170,60,.4); }
+  #start h2 { color:#8a7d5e; font-size:15px; letter-spacing:5px; font-weight:400; margin:0 0 34px 0; }
+  #start .controls { color:#b8ab8b; font-size:14px; line-height:1.9; column-count:2; column-gap:60px;
+                     background:rgba(0,0,0,.35); padding:18px 34px; border:1px solid #4a3f26;
+                     border-radius:8px; }
+  #start .controls b { color:#ffd76a; display:inline-block; min-width:110px; }
+  #start .click { color:#e8d9ae; margin-top:30px; font-size:18px; letter-spacing:3px;
+                  animation:pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:.5;} 50%{opacity:1;} }
+
+  /* loadout menu */
+  #menu { position:absolute; inset:0; background:rgba(8,6,4,.88); display:none;
+          pointer-events:auto; z-index:15; overflow:auto; }
+  #menu h1 { color:#e8d9ae; text-align:center; font-family:serif; letter-spacing:8px;
+             font-size:34px; margin:30px 0 4px; }
+  #menu .hint { color:#8a7d5e; text-align:center; font-size:13px; letter-spacing:2px; margin-bottom:22px; }
+  #menu .row { display:flex; justify-content:center; gap:18px; flex-wrap:wrap; margin-bottom:14px; }
+  #menu h3 { color:#b8a878; text-align:center; letter-spacing:4px; font-size:15px;
+             margin:14px 0 12px; font-weight:600; }
+  .card { width:210px; background:rgba(22,18,12,.9); border:1px solid #4a3f26; border-radius:8px;
+          padding:14px 16px; cursor:pointer; transition:all .15s; color:#cbbd9a; }
+  .card:hover { border-color:#a8905a; transform:translateY(-2px); }
+  .card.sel { border-color:#ffd76a; box-shadow:0 0 18px rgba(255,205,90,.25);
+              background:rgba(42,34,18,.95); }
+  .card .t { font-size:17px; color:#ffe9b0; letter-spacing:1px; margin-bottom:6px; }
+  .card .t .em { font-size:20px; margin-right:6px; }
+  .card .d { font-size:11.5px; line-height:1.55; opacity:.85; }
+  .card .d b { color:#ffd76a; }
+  #menu .close { display:block; margin:18px auto 40px; padding:10px 44px; font-size:15px;
+                 letter-spacing:3px; background:#3a2f1a; color:#ffe9b0; border:1px solid #6b5a30;
+                 border-radius:6px; cursor:pointer; }
+  #menu .close:hover { background:#4a3d22; }
+
+  /* toast */
+  #toast { position:absolute; left:50%; top:16%; transform:translateX(-50%); color:#ffe9b0;
+           font-size:17px; letter-spacing:2px; text-shadow:0 2px 6px #000; opacity:0;
+           transition:opacity .3s; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="cross"></div>
+
+  <div id="vitals">
+    <div id="pname">WOLF UNIT-01</div>
+    <div id="php-wrap"><div id="php"></div></div>
+    <div id="php-ghost"></div>
+  </div>
+
+  <div id="posture-wrap"><div id="posture"></div><div id="posture-tick"></div></div>
+
+  <div id="powname">FIRE ARTS</div>
+  <div id="abilities">
+    <div class="ab" id="ab-r"><span class="key">R</span><span class="ic"></span><span class="nm"></span><span class="cd"></span></div>
+    <div class="ab" id="ab-t"><span class="key">T</span><span class="ic"></span><span class="nm"></span><span class="cd"></span></div>
+    <div class="ab" id="ab-c"><span class="key">C</span><span class="ic"></span><span class="nm"></span><span class="cd"></span></div>
+    <div class="ab" id="ab-g"><span class="key">G</span><span class="ic"></span><span class="nm"></span><span class="cd"></span></div>
+  </div>
+
+  <div id="peril">危</div>
+  <div id="msg"></div>
+  <div id="submsg"></div>
+  <div id="interact"></div>
+  <div id="toast"></div>
+
+  <div id="death"><div class="kanji">死</div><div class="sub">CLICK TO RETURN FROM DEATH</div></div>
+</div>
+
+<div id="menu">
+  <h1>LOADOUT</h1>
+  <div class="hint">press M or ESC to return to combat</div>
+  <h3>— WEAPON —</h3>
+  <div class="row" id="weapon-row"></div>
+  <h3>— SHINOBI ART —</h3>
+  <div class="row" id="power-row"></div>
+  <button class="close" id="menu-close">RETURN</button>
+</div>
+
+<div id="start">
+  <h1>SHINOBI PROTOCOL</h1>
+  <h2>SHADOWS DIE THRICE &nbsp;·&nbsp; A SEKIRO-LIKE COMBAT SANDBOX</h2>
+  <div class="controls">
+    <div><b>Mouse 1</b> Attack</div>
+    <div><b>Mouse 2 (tap)</b> Parry — tiny window</div>
+    <div><b>Mouse 2 (hold)</b> Block — builds your posture</div>
+    <div><b>WASD</b> Move</div>
+    <div><b>Space + WASD</b> Dash / side-dash / backstep (i-frames)</div>
+    <div><b>F</b> Jump — attack in the air</div>
+    <div><b>E</b> Interact</div>
+    <div><b>R T C G</b> Shinobi arts (powers)</div>
+    <div><b>M</b> Loadout — weapon &amp; power</div>
+    <div><b>Step on plates</b> to summon enemies</div>
+  </div>
+  <div class="click">— CLICK TO TAKE UP THE BLADE —</div>
+</div>
+
+<script src="../vendor/three.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/rig.js"></script>
+<script src="js/anim.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/powers.js"></script>
+<script src="js/player.js"></script>
+<script src="js/enemy.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
